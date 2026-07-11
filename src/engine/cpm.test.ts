@@ -83,10 +83,10 @@ describe('forwardPass', () => {
     const deps: Dependency[] = [makeDep('d1', 'A', 'B', 'FS', 3)]
     const result = forwardPass(activities, deps, projectStart)
 
-    expect(result.get('A').earlyStart).toBe('2026-07-01')
-    expect(result.get('A').earlyFinish).toBe('2026-07-11')
-    expect(result.get('B').earlyStart).toBe('2026-07-14')
-    expect(result.get('B').earlyFinish).toBe('2026-07-19')
+    expect(result.get('A')!.earlyStart).toBe('2026-07-01')
+    expect(result.get('A')!.earlyFinish).toBe('2026-07-11')
+    expect(result.get('B')!.earlyStart).toBe('2026-07-14')
+    expect(result.get('B')!.earlyFinish).toBe('2026-07-19')
   })
 
   it('SS: successor starts when predecessor starts', () => {
@@ -97,9 +97,9 @@ describe('forwardPass', () => {
     const deps: Dependency[] = [makeDep('d1', 'A', 'B', 'SS')]
     const result = forwardPass(activities, deps, projectStart)
 
-    expect(result.get('A').earlyStart).toBe('2026-07-01')
-    expect(result.get('B').earlyStart).toBe('2026-07-01')
-    expect(result.get('B').earlyFinish).toBe('2026-07-06')
+    expect(result.get('A')!.earlyStart).toBe('2026-07-01')
+    expect(result.get('B')!.earlyStart).toBe('2026-07-01')
+    expect(result.get('B')!.earlyFinish).toBe('2026-07-06')
   })
 
   it('SS with lag: B starts after A start + lag', () => {
@@ -110,8 +110,8 @@ describe('forwardPass', () => {
     const deps: Dependency[] = [makeDep('d1', 'A', 'B', 'SS', 4)]
     const result = forwardPass(activities, deps, projectStart)
 
-    expect(result.get('B').earlyStart).toBe('2026-07-05')
-    expect(result.get('B').earlyFinish).toBe('2026-07-10')
+    expect(result.get('B')!.earlyStart).toBe('2026-07-05')
+    expect(result.get('B')!.earlyFinish).toBe('2026-07-10')
   })
 
   it('FF: successor finishes when predecessor finishes', () => {
@@ -123,8 +123,8 @@ describe('forwardPass', () => {
     const result = forwardPass(activities, deps, projectStart)
 
     // B finishes when A finishes (2026-07-11), so B starts at EF - duration = 2026-07-06
-    expect(result.get('B').earlyFinish).toBe('2026-07-11')
-    expect(result.get('B').earlyStart).toBe('2026-07-06')
+    expect(result.get('B')!.earlyFinish).toBe('2026-07-11')
+    expect(result.get('B')!.earlyStart).toBe('2026-07-06')
   })
 
   it('FF with lag: B finishes after A finish + lag', () => {
@@ -135,8 +135,8 @@ describe('forwardPass', () => {
     const deps: Dependency[] = [makeDep('d1', 'A', 'B', 'FF', 3)]
     const result = forwardPass(activities, deps, projectStart)
 
-    expect(result.get('B').earlyFinish).toBe('2026-07-14')
-    expect(result.get('B').earlyStart).toBe('2026-07-09')
+    expect(result.get('B')!.earlyFinish).toBe('2026-07-14')
+    expect(result.get('B')!.earlyStart).toBe('2026-07-09')
   })
 
   it('SF: successor finishes when predecessor starts', () => {
@@ -148,8 +148,8 @@ describe('forwardPass', () => {
     const result = forwardPass(activities, deps, projectStart)
 
     // B finishes when A starts (2026-07-01), so B starts at EF - duration = 2026-06-26
-    expect(result.get('B').earlyFinish).toBe('2026-07-01')
-    expect(result.get('B').earlyStart).toBe('2026-06-26')
+    expect(result.get('B')!.earlyFinish).toBe('2026-07-01')
+    expect(result.get('B')!.earlyStart).toBe('2026-06-26')
   })
 
   it('SF with lag: B finishes after A start + lag', () => {
@@ -160,8 +160,8 @@ describe('forwardPass', () => {
     const deps: Dependency[] = [makeDep('d1', 'A', 'B', 'SF', 2)]
     const result = forwardPass(activities, deps, projectStart)
 
-    expect(result.get('B').earlyFinish).toBe('2026-07-03')
-    expect(result.get('B').earlyStart).toBe('2026-06-28')
+    expect(result.get('B')!.earlyFinish).toBe('2026-07-03')
+    expect(result.get('B')!.earlyStart).toBe('2026-06-28')
   })
 
   it('takes max ES from multiple predecessors', () => {
@@ -178,11 +178,11 @@ describe('forwardPass', () => {
     ]
     const result = forwardPass(activities, deps, projectStart)
 
-    expect(result.get('A').earlyFinish).toBe('2026-07-11')
-    expect(result.get('B').earlyFinish).toBe('2026-07-21')
+    expect(result.get('A')!.earlyFinish).toBe('2026-07-11')
+    expect(result.get('B')!.earlyFinish).toBe('2026-07-21')
     // C should start after B finishes (later)
-    expect(result.get('C').earlyStart).toBe('2026-07-21')
-    expect(result.get('C').earlyFinish).toBe('2026-07-26')
+    expect(result.get('C')!.earlyStart).toBe('2026-07-21')
+    expect(result.get('C')!.earlyFinish).toBe('2026-07-26')
   })
 
   it('takes max ES from multiple predecessors with different relation types', () => {
@@ -201,7 +201,7 @@ describe('forwardPass', () => {
     // A FS: C.ES >= A.EF = 2026-07-11
     // B SS+5: C.ES >= B.ES + 5 = 2026-07-01 + 5 = 2026-07-06
     // Max = 2026-07-11
-    expect(result.get('C').earlyStart).toBe('2026-07-11')
+    expect(result.get('C')!.earlyStart).toBe('2026-07-11')
   })
 })
 
@@ -251,12 +251,12 @@ describe('backwardPass', () => {
     const result = backwardPass(activities, deps, earlyDates, projectFinish)
 
     // C (terminal): LS = 07-26 - 15 = 07-11
-    expect(result.get('C').lateStart).toBe('2026-07-11')
+    expect(result.get('C')!.lateStart).toBe('2026-07-11')
     // B (terminal): LS = 07-26 - 5 = 07-21 (must finish by project finish)
-    expect(result.get('B').lateStart).toBe('2026-07-21')
+    expect(result.get('B')!.lateStart).toBe('2026-07-21')
     // A: LF = min(B.LS, C.LS) = min(07-21, 07-11) = 07-11
-    expect(result.get('A').lateFinish).toBe('2026-07-11')
-    expect(result.get('A').lateStart).toBe('2026-07-01')
+    expect(result.get('A')!.lateFinish).toBe('2026-07-11')
+    expect(result.get('A')!.lateStart).toBe('2026-07-01')
   })
 })
 

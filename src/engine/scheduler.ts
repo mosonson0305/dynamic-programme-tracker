@@ -1,6 +1,6 @@
 import type { Activity, Dependency } from '../models'
 import { forwardPass, backwardPass, calculateFloat, identifyCriticalPath } from './cpm'
-import type { EarlyDates, LateDates, FloatInfo } from './cpm'
+import type { FloatInfo } from './cpm'
 import { todayStr } from '../utils/date-utils'
 
 export interface ScheduleResult {
