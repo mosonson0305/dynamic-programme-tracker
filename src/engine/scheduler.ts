@@ -28,17 +28,11 @@ export function schedule(
 
   const cloned: Activity[] = activities.map((a) => ({ ...a }))
 
-  // Build set of activity IDs that have dependencies
   const hasDeps = new Set<string>()
   for (const d of dependencies) {
     hasDeps.add(d.successorId)
   }
 
-  // For activities with NO dependencies that have imported dates,
-  // inject the imported startDate as the project start override
-  // so forward pass can use it.
-  // We temporarily set constraintType to SNET to force the forward pass
-  // to respect the date.
   const savedConstraints = new Map<string, { ct: string; cd: string | null }>()
   for (const a of cloned) {
     if (!hasDeps.has(a.id) && a.startDate) {
@@ -48,10 +42,8 @@ export function schedule(
     }
   }
 
-  // Forward pass
   const earlyDates = forwardPass(cloned, dependencies, start)
 
-  // Restore constraints
   for (const a of cloned) {
     const saved = savedConstraints.get(a.id)
     if (saved) {
@@ -60,7 +52,6 @@ export function schedule(
     }
   }
 
-  // Find project finish
   let projectFinish = start
   for (const [, ed] of earlyDates) {
     if (ed.earlyFinish > projectFinish) {
@@ -68,12 +59,21 @@ export function schedule(
     }
   }
 
-  // Backward pass
   const lateDates = backwardPass(cloned, dependencies, earlyDates, projectFinish)
   const floatInfo = calculateFloat(cloned, earlyDates, lateDates)
   const criticalPath = identifyCriticalPath(cloned, floatInfo)
 
-  // Update cloned activities with computed dates
+  // DEBUG: log to console
+  console.log('[CPM DEBUG] projectFinish:', projectFinish, 'start:', start)
+  console.log('[CPM DEBUG] Top 5 activities:')
+  for (const a of cloned.slice(0, 8)) {
+    const e = earlyDates.get(a.id)
+    const l = lateDates.get(a.id)
+    const f = floatInfo.get(a.id)
+    console.log(`  ${a.wbsCode} ES=${e?.earlyStart} EF=${e?.earlyFinish} LS=${l?.lateStart} LF=${l?.lateFinish} float=${f?.totalFloat} crit=${f?.isCritical}`)
+  }
+  console.log('[CPM DEBUG] CP length:', criticalPath.length)
+
   for (const a of cloned) {
     const early = earlyDates.get(a.id)
     const late = lateDates.get(a.id)
