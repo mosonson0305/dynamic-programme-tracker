@@ -2,9 +2,41 @@
   overflow: auto;
 }
 
-.gantt .bar-label {
+/* Grid header styling */
+.gantt .grid-header {
+  fill: #f1f5f9;
+  stroke: #e2e8f0;
+  font-weight: 600;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.025em;
+}
+
+.gantt .grid-row:nth-child(even) {
+  fill: #f8fafc;
+}
+
+.gantt .grid-row:nth-child(odd) {
+  fill: #ffffff;
+}
+
+/* Today marker */
+.gantt .today-highlight {
+  fill: #fef3c7;
+  opacity: 0.5;
+}
+
+/* Arrow styling for dependencies */
+.gantt .arrow {
+  stroke: #94a3b8;
+  stroke-width: 1.5px;
+  fill: none;
+}
+
+.bar-label {
   fill: #fff;
   font-size: 11px;
+  font-weight: 500;
 }
 
 .critical .bar-progress {
