@@ -3,7 +3,7 @@ import { useProgrammeStore } from '../../store/programmeStore'
 import { db } from '../../data/db'
 
 export default function WBSTree() {
-  const { activities, runSchedule } = useProgrammeStore()
+  const { activities } = useProgrammeStore()
   const [expanded, setExpanded] = useState<Set<string>>(new Set(activities.filter(a => a.wbsLevel === 1).map(a => a.wbsCode)))
   const [editId, setEditId] = useState<string | null>(null)
   const [editStart, setEditStart] = useState('')
@@ -51,7 +51,12 @@ export default function WBSTree() {
       const merged = { ...base, startDate: editStart || null, finishDate: editFinish || null, percentComplete: pct, status }
       await db.activities.put(merged as any)
 
-      await runSchedule()
+      // Reload from DB to get fresh data, then re-schedule
+      const { loadFromDB } = useProgrammeStore.getState()
+      const project = useProgrammeStore.getState().project
+      if (project) {
+        await loadFromDB(project.id)
+      }
       setEditId(null)
     } catch (e: any) {
       alert('Save failed: ' + (e?.message || String(e)))
