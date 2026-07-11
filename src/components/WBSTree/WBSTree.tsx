@@ -1,121 +1,172 @@
-import { useState, useMemo } from 'react'
-import { ChevronDown, ChevronRight } from 'lucide-react'
+import { useState } from 'react'
 import { useProgrammeStore } from '../../store/programmeStore'
-import type { Activity } from '../../models'
-
-/** Group activities by WBS level */
-function buildWBSHierarchy(activities: Activity[]): Map<string, Activity[]> {
-  const groups = new Map<string, Activity[]>()
-  for (const a of activities) {
-    const key = String(a.wbsLevel)
-    const list = groups.get(key) || []
-    list.push(a)
-    groups.set(key, list)
-  }
-
-  // Sort WBS levels ascending
-  return new Map(
-    [...groups.entries()].sort(([a], [b]) => Number(a) - Number(b)),
-  )
-}
-
-function formatDate(date: string | null): string {
-  if (!date) return '-'
-  return date.substring(5) // MM-DD
-}
-
-interface WBSRowProps {
-  activity: Activity
-  depth: number
-}
-
-function WBSRow({ activity, depth }: WBSRowProps) {
-  const indent = depth * 20
-
-  return (
-    <div
-      className="grid grid-cols-5 gap-2 px-3 py-1.5 text-sm border-b border-gray-100 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-900/50"
-      style={{ paddingLeft: `${12 + indent}px` }}
-    >
-      <span className="font-mono text-xs text-gray-500 dark:text-gray-400 self-center">
-        {activity.wbsCode}
-      </span>
-      <span className="truncate self-center">{activity.name}</span>
-      <span className="text-xs self-center text-gray-600 dark:text-gray-300">
-        {formatDate(activity.startDate)}
-      </span>
-      <span className="text-xs self-center text-gray-600 dark:text-gray-300">
-        {formatDate(activity.finishDate)}
-      </span>
-      <span className="self-center">
-        {activity.isCritical ? (
-          <span className="inline-block px-1.5 py-0.5 rounded text-xs font-medium bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400">
-            CP
-          </span>
-        ) : (
-          <span className="text-xs text-blue-600 dark:text-blue-400">
-            {activity.totalFloat}d
-          </span>
-        )}
-      </span>
-    </div>
-  )
-}
-
-interface WBSGroupProps {
-  wbsLevel: string
-  activities: Activity[]
-}
-
-function WBSGroup({ wbsLevel, activities }: WBSGroupProps) {
-  const [expanded, setExpanded] = useState(true)
-  const toggle = () => setExpanded((prev) => !prev)
-  const iconSize = 16
-
-  return (
-    <div>
-      <button
-        onClick={toggle}
-        className="w-full flex items-center gap-1.5 px-3 py-2 text-sm font-semibold bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-700 border-b border-gray-300 dark:border-gray-700"
-      >
-        {expanded ? <ChevronDown size={iconSize} /> : <ChevronRight size={iconSize} />}
-        Level {wbsLevel}
-        <span className="ml-2 text-xs font-normal text-gray-500 dark:text-gray-400">
-          ({activities.length} activities)
-        </span>
-      </button>
-      {expanded &&
-        activities.map((a) => <WBSRow key={a.id} activity={a} depth={Number(wbsLevel)} />)}
-    </div>
-  )
-}
 
 export default function WBSTree() {
-  const activities = useProgrammeStore((s) => s.activities)
-  const hierarchy = useMemo(() => buildWBSHierarchy(activities), [activities])
+  const { activities, runSchedule } = useProgrammeStore()
+  const [expanded, setExpanded] = useState<Set<string>>(new Set(activities.filter(a => a.wbsLevel === 1).map(a => a.wbsCode)))
+  const [editId, setEditId] = useState<string | null>(null)
+  const [editStart, setEditStart] = useState('')
+  const [editFinish, setEditFinish] = useState('')
+  const [editPct, setEditPct] = useState('0')
+  const [editStatus, setEditStatus] = useState('')
 
-  if (activities.length === 0) {
+  const toggle = (wbs: string) => {
+    const next = new Set(expanded)
+    if (next.has(wbs)) next.delete(wbs); else next.add(wbs)
+    setExpanded(next)
+  }
+
+  const rootActs = activities.filter(a => a.wbsLevel === 1).sort((a, b) => a.wbsCode.localeCompare(b.wbsCode))
+  const children = (wbsCode: string) =>
+    activities.filter(a => a.wbsCode.startsWith(wbsCode + '.') && a.wbsCode.split('.').length === wbsCode.split('.').length + 1)
+      .sort((a, b) => a.wbsCode.localeCompare(b.wbsCode))
+
+  const openEdit = (id: string) => {
+    const a = activities.find(x => x.id === id)
+    if (!a) return
+    setEditId(id)
+    setEditStart(a.startDate || '')
+    setEditFinish(a.finishDate || '')
+    setEditPct(String(a.percentComplete))
+    setEditStatus(a.status)
+  }
+
+  const saveEdit = () => {
+    if (!editId) return
+    const a = activities.find(x => x.id === editId)
+    if (!a) return
+
+    // Use IndexedDB directly
+    import('../../data/indexeddb-repo').then(({ IndexedDBRepository }) => {
+      const repo = new IndexedDBRepository()
+      const pct = parseInt(editPct) || 0
+      let status = editStatus as any
+      if (pct >= 100) status = 'completed'
+      else if (pct > 0) status = 'in_progress'
+      else status = 'not_started'
+
+      repo.updateActivity(editId, {
+        startDate: editStart || null,
+        finishDate: editFinish || null,
+        percentComplete: pct,
+        status,
+      }).then(() => {
+        // Re-run schedule to propagate date changes
+        runSchedule()
+        setEditId(null)
+      })
+    })
+  }
+
+  const renderRow = (act: typeof activities[0], depth: number = 0) => {
+    const kids = children(act.wbsCode)
+    const hasKids = kids.length > 0
+    const isExpanded = expanded.has(act.wbsCode)
+
     return (
-      <div className="flex items-center justify-center h-64 text-gray-500 dark:text-gray-400">
-        No activities to display. Import a CSV to see the WBS tree.
+      <div key={act.id}>
+        <div className="flex items-center py-1 px-2 hover:bg-gray-50 border-b border-gray-100 text-xs cursor-pointer"
+          style={{ paddingLeft: `${depth * 20 + 8}px` }}
+          onClick={() => openEdit(act.id)}>
+          {hasKids && (
+            <span onClick={e => { e.stopPropagation(); toggle(act.wbsCode) }} className="mr-1 w-4 text-gray-400 cursor-pointer select-none">
+              {isExpanded ? '▾' : '▸'}
+            </span>
+          )}
+          {!hasKids && <span className="w-4 mr-1" />}
+          <span className="font-mono text-gray-400 w-16">{act.wbsCode}</span>
+          <span className="flex-1 truncate">{act.name}</span>
+          <span className="text-gray-500 w-24 text-right font-mono">{act.startDate?.slice(5) || '--'}</span>
+          <span className="text-gray-500 w-24 text-right font-mono">{act.finishDate?.slice(5) || '--'}</span>
+          <span className="text-gray-500 w-10 text-right">{act.percentComplete}%</span>
+          <span className="w-16 text-right">
+            <span className={`px-1.5 py-0.5 rounded text-xs font-medium ${
+              act.isCritical ? 'bg-red-100 text-red-700' : 'bg-blue-100 text-blue-600'
+            }`}>
+              {act.isCritical ? 'CP' : `${act.totalFloat}d`}
+            </span>
+          </span>
+        </div>
+        {hasKids && isExpanded && kids.map(k => renderRow(k, depth + 1))}
       </div>
     )
   }
 
+  if (activities.length === 0) {
+    return <div className="p-6 text-gray-400 text-sm">No activities. Import a CSV first.</div>
+  }
+
   return (
-    <div className="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
-      {/* Header */}
-      <div className="grid grid-cols-5 gap-2 px-3 py-2 text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700">
-        <span>WBS Code</span>
-        <span>Activity Name</span>
-        <span>Start</span>
-        <span>Finish</span>
-        <span>Float / CP</span>
+    <div className="p-6">
+      <h2 className="text-lg font-bold mb-3">WBS Tree</h2>
+      <p className="text-xs text-gray-400 mb-3">Click any row to edit dates and progress.</p>
+
+      <div className="bg-white rounded-lg border border-gray-200 shadow-sm overflow-auto">
+        <div className="flex items-center py-2 px-2 bg-gray-50 border-b font-semibold text-xs text-gray-500 sticky top-0">
+          <span className="w-4 mr-1" />
+          <span className="w-16">WBS</span>
+          <span className="flex-1">Activity</span>
+          <span className="w-24 text-right">Start</span>
+          <span className="w-24 text-right">Finish</span>
+          <span className="w-10 text-right">%</span>
+          <span className="w-16 text-right">Float</span>
+        </div>
+        {rootActs.map(a => renderRow(a))}
       </div>
-      {/* Body */}
-      {[...hierarchy.entries()].map(([level, acts]) => (
-        <WBSGroup key={level} wbsLevel={level} activities={acts} />
-      ))}
+
+      {/* Edit modal */}
+      {editId && (() => {
+        const act = activities.find(x => x.id === editId)
+        if (!act) return null
+        return (
+          <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50" onClick={() => setEditId(null)}>
+            <div className="bg-white rounded-lg shadow-xl p-6 w-96" onClick={e => e.stopPropagation()}>
+              <h3 className="text-lg font-bold mb-1">{act.wbsCode}</h3>
+              <p className="text-sm text-gray-500 mb-4">{act.name}</p>
+
+              <div className="space-y-3">
+                <div>
+                  <label className="text-xs text-gray-500">Start Date</label>
+                  <input type="date" value={editStart} onChange={e => setEditStart(e.target.value)}
+                    className="w-full border rounded px-2 py-1 text-sm mt-1" />
+                </div>
+                <div>
+                  <label className="text-xs text-gray-500">Finish Date</label>
+                  <input type="date" value={editFinish} onChange={e => setEditFinish(e.target.value)}
+                    className="w-full border rounded px-2 py-1 text-sm mt-1" />
+                </div>
+                <div>
+                  <label className="text-xs text-gray-500">% Complete</label>
+                  <input type="range" min="0" max="100" value={editPct} onChange={e => setEditPct(e.target.value)}
+                    className="w-full mt-1" />
+                  <div className="text-center text-sm font-bold">{editPct}%</div>
+                </div>
+                <div>
+                  <label className="text-xs text-gray-500">Status</label>
+                  <select value={editStatus} onChange={e => setEditStatus(e.target.value)}
+                    className="w-full border rounded px-2 py-1 text-sm mt-1">
+                    <option value="not_started">Not Started</option>
+                    <option value="in_progress">In Progress</option>
+                    <option value="completed">Completed</option>
+                    <option value="delayed">Delayed</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="flex gap-2 mt-4">
+                <button onClick={saveEdit}
+                  className="flex-1 bg-purple-600 text-white py-2 rounded text-sm font-medium hover:bg-purple-700">
+                  Save
+                </button>
+                <button onClick={() => setEditId(null)}
+                  className="flex-1 bg-gray-100 text-gray-600 py-2 rounded text-sm hover:bg-gray-200">
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </div>
+        )
+      })()}
     </div>
   )
 }

@@ -118,10 +118,16 @@ export const useProgrammeStore = create<ProgrammeState>((set, get) => ({
     }
   },
 
-  runSchedule: (projectStart) => {
+  runSchedule: async (projectStart) => {
     const { activities, dependencies } = get()
     const start = projectStart || new Date().toISOString().slice(0, 10)
     const result = schedule(activities, dependencies, start)
+
+    // Persist recomputed dates to DB
+    for (const a of result.activities) {
+      try { await repo.updateActivity(a.id, { startDate: a.startDate, finishDate: a.finishDate, earlyStart: a.earlyStart, earlyFinish: a.earlyFinish, lateStart: a.lateStart, lateFinish: a.lateFinish, totalFloat: a.totalFloat, isCritical: a.isCritical }) } catch {}
+    }
+
     set({ activities: result.activities, scheduleResult: result })
   },
 
