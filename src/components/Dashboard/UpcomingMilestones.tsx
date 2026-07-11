@@ -33,11 +33,16 @@ export default function UpcomingMilestones() {
     const today = todayStr()
     const cutoff = addDays(today, 28)
 
-    const milestones = activities
+    console.log('[Upcoming] today:', today, 'cutoff:', cutoff, 'total activities:', activities.length,
+      'milestones:', activities.filter(a => a.isMilestone).length)
+
+    const candidates = activities
       .filter((a) => a.isMilestone)
       .filter((a) => {
         if (!a.finishDate) return false
-        return a.finishDate >= today && a.finishDate <= cutoff
+        const inRange = a.finishDate >= today && a.finishDate <= cutoff
+        if (!inRange) console.log('  [Upcoming] SKIP', a.wbsCode, a.name, 'finishDate:', a.finishDate)
+        return inRange
       })
       .sort((a, b) => {
         const da = a.finishDate || ''
@@ -45,7 +50,8 @@ export default function UpcomingMilestones() {
         return da.localeCompare(db)
       })
 
-    return milestones
+    console.log('[Upcoming] rendered:', candidates.length)
+    return candidates
   }, [activities])
 
   if (milestones.length === 0) {
