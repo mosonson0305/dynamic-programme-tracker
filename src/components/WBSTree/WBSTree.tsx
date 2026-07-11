@@ -51,13 +51,16 @@ export default function WBSTree() {
       const merged = { ...base, startDate: editStart || null, finishDate: editFinish || null, percentComplete: pct, status }
       await db.activities.put(merged as any)
 
-      // Update store in-memory directly (don't re-run CPM — user edits are manual)
+      // Update store in-memory directly
       const store = useProgrammeStore.getState()
       const idx = store.activities.findIndex(a => a.id === editId)
       if (idx >= 0) {
         const updated = [...store.activities]
         updated[idx] = { ...updated[idx], startDate: editStart || null, finishDate: editFinish || null, percentComplete: pct, status }
+        console.log('[WBS EDIT] before:', store.activities[idx].finishDate, 'after:', updated[idx].finishDate, 'total activities:', updated.length)
         useProgrammeStore.setState({ activities: updated })
+      } else {
+        console.log('[WBS EDIT] activity not found in store! editId:', editId)
       }
       setEditId(null)
     } catch (e: any) {
