@@ -103,6 +103,14 @@ export function forwardPass(
       }
     }
 
+    // Apply SNET constraint even for activities with predecessors
+    if (constraint?.type === 'SNET' && constraint.date) {
+      if (constraint.date > es) {
+        es = constraint.date
+        ef = addDays(es, duration)
+      }
+    }
+
     dates.set(id, { earlyStart: es, earlyFinish: ef })
   }
 

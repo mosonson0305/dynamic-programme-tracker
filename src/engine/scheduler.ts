@@ -17,8 +17,6 @@ export function schedule(
 ): ScheduleResult {
   const start = projectStart ?? todayStr()
 
-  console.log('[CPM] Scheduling', activities.length, 'activities,', dependencies.length, 'dependencies, project start:', start)
-
   if (activities.length === 0) {
     return {
       activities: [],
@@ -97,11 +95,6 @@ export function schedule(
       a.totalFloat = fi.totalFloat
       a.isCritical = fi.isCritical
     }
-  }
-
-  console.log('[CPM] CP length:', criticalPath.length, 'projectFinish:', projectFinish)
-  for (const a of cloned.slice(0, 5)) {
-    console.log(`  ${a.wbsCode} float=${a.totalFloat} crit=${a.isCritical}`)
   }
 
   return {
