@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useProgrammeStore } from '../../store/programmeStore'
+import { db } from '../../data/db'
 
 export default function WBSTree() {
   const { activities, runSchedule } = useProgrammeStore()
@@ -31,31 +32,25 @@ export default function WBSTree() {
     setEditStatus(a.status)
   }
 
-  const saveEdit = () => {
+  const saveEdit = async () => {
     if (!editId) return
-    const a = activities.find(x => x.id === editId)
-    if (!a) return
 
-    // Use IndexedDB directly
-    import('../../data/indexeddb-repo').then(({ IndexedDBRepository }) => {
-      const repo = new IndexedDBRepository()
-      const pct = parseInt(editPct) || 0
-      let status = editStatus as any
-      if (pct >= 100) status = 'completed'
-      else if (pct > 0) status = 'in_progress'
-      else status = 'not_started'
+    const pct = parseInt(editPct) || 0
+    let status: any = editStatus
+    if (pct >= 100) status = 'completed'
+    else if (pct > 0) status = 'in_progress'
+    else status = 'not_started'
 
-      repo.updateActivity(editId, {
-        startDate: editStart || null,
-        finishDate: editFinish || null,
-        percentComplete: pct,
-        status,
-      }).then(() => {
-        // Re-run schedule to propagate date changes
-        runSchedule()
-        setEditId(null)
-      })
+    await db.activities.update(editId, {
+      startDate: editStart || null,
+      finishDate: editFinish || null,
+      percentComplete: pct,
+      status,
     })
+
+    // Re-schedule to propagate changes
+    runSchedule()
+    setEditId(null)
   }
 
   const renderRow = (act: typeof activities[0], depth: number = 0) => {
