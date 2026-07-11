@@ -32,11 +32,26 @@ export function activitiesToGanttTasks(
     if (a.isCritical) customClass = 'critical'
     if (a.isMilestone) customClass = customClass ? `${customClass} milestone` : 'milestone'
 
+    let start = a.startDate || ''
+    let end = a.finishDate || ''
+
+    // Guard: Frappe Gantt crashes if start > end — swap and fix
+    if (start && end && start > end) {
+      // For 0-duration milestones, ensure start == end
+      if (a.duration === 0) {
+        end = start
+      } else {
+        // Swap so Gantt can render, mark as warning via class
+        ;[start, end] = [end, start]
+        customClass = customClass ? `${customClass} date-warn` : 'date-warn'
+      }
+    }
+
     return {
       id: a.id,
       name: `${a.wbsCode} ${a.name}`,
-      start: a.startDate || '',
-      end: a.finishDate || '',
+      start,
+      end,
       progress: a.percentComplete,
       dependencies: predMap.get(a.id) || [],
       custom_class: customClass,

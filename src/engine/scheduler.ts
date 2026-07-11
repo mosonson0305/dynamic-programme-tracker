@@ -4,31 +4,12 @@ import type { FloatInfo } from './cpm'
 import { todayStr } from '../utils/date-utils'
 
 export interface ScheduleResult {
-  /** Input activities deeply cloned and updated with computed dates */
   activities: Activity[]
-  /** Critical path activity IDs in order */
   criticalPath: string[]
-  /** Project finish date (YYYY-MM-DD) */
   projectFinish: string
-  /** Float info for each activity */
   floatInfo: Map<string, FloatInfo>
 }
 
-/**
- * Run the full CPM schedule computation.
- *
- * 1. Forward pass → Early Start / Early Finish
- * 2. Backward pass → Late Start / Late Finish
- * 3. Float calculation → total float + critical flag
- * 4. Critical path identification
- *
- * Deep clones input activities before mutating so callers are not affected.
- *
- * @param activities   Array of project activities
- * @param dependencies Array of dependencies between activities
- * @param projectStart Project start date (defaults to today)
- * @returns ScheduleResult with updated activities, critical path, finish date, and float info
- */
 export function schedule(
   activities: Activity[],
   dependencies: Dependency[],
@@ -45,13 +26,41 @@ export function schedule(
     }
   }
 
-  // Deep clone activities to avoid mutating inputs
   const cloned: Activity[] = activities.map((a) => ({ ...a }))
+
+  // Build set of activity IDs that have dependencies
+  const hasDeps = new Set<string>()
+  for (const d of dependencies) {
+    hasDeps.add(d.successorId)
+  }
+
+  // For activities with NO dependencies that have imported dates,
+  // inject the imported startDate as the project start override
+  // so forward pass can use it.
+  // We temporarily set constraintType to SNET to force the forward pass
+  // to respect the date.
+  const savedConstraints = new Map<string, { ct: string; cd: string | null }>()
+  for (const a of cloned) {
+    if (!hasDeps.has(a.id) && a.startDate) {
+      savedConstraints.set(a.id, { ct: a.constraintType, cd: a.constraintDate })
+      a.constraintType = 'SNET'
+      a.constraintDate = a.startDate
+    }
+  }
 
   // Forward pass
   const earlyDates = forwardPass(cloned, dependencies, start)
 
-  // Find project finish (max early finish across all activities)
+  // Restore constraints
+  for (const a of cloned) {
+    const saved = savedConstraints.get(a.id)
+    if (saved) {
+      a.constraintType = saved.ct as Activity['constraintType']
+      a.constraintDate = saved.cd
+    }
+  }
+
+  // Find project finish
   let projectFinish = start
   for (const [, ed] of earlyDates) {
     if (ed.earlyFinish > projectFinish) {
@@ -61,11 +70,7 @@ export function schedule(
 
   // Backward pass
   const lateDates = backwardPass(cloned, dependencies, earlyDates, projectFinish)
-
-  // Float calculation
   const floatInfo = calculateFloat(cloned, earlyDates, lateDates)
-
-  // Critical path
   const criticalPath = identifyCriticalPath(cloned, floatInfo)
 
   // Update cloned activities with computed dates

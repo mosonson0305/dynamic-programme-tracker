@@ -31,6 +31,11 @@ export function forwardPass(
   const order = topologicalSort(activities, dependencies)
   const dates = new Map<string, EarlyDates>()
   const durMap = new Map(activities.map((a) => [a.id, a.duration]))
+  // Build map of constraint data for SNET/FNET
+  const constraintMap = new Map(activities.map((a) => [a.id, {
+    type: a.constraintType,
+    date: a.constraintDate,
+  }]))
 
   const predMap = new Map<string, Dependency[]>()
   for (const dep of dependencies) {
@@ -42,9 +47,14 @@ export function forwardPass(
   for (const id of order) {
     const duration = durMap.get(id) ?? 0
     const preds = predMap.get(id)
+    const constraint = constraintMap.get(id)
 
     if (!preds || preds.length === 0) {
-      const es = projectStart
+      let es = projectStart
+      // SNET constraint: start no earlier than constraint date
+      if (constraint?.type === 'SNET' && constraint.date) {
+        if (constraint.date > es) es = constraint.date
+      }
       const ef = addDays(es, duration)
       dates.set(id, { earlyStart: es, earlyFinish: ef })
       continue

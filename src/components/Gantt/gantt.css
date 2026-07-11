@@ -46,3 +46,7 @@
 .milestone .bar-progress {
   fill: #8b5cf6 !important;
 }
+
+.date-warn .bar-progress {
+  fill: #f59e0b !important;
+}
