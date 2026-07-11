@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import type { Activity, Dependency, Baseline, Project } from '../models'
 import { IndexedDBRepository } from '../data/indexeddb-repo'
+import { db } from '../data/db'
 import { schedule, type ScheduleResult } from '../engine/scheduler'
 import { parseProgrammeCSV } from '../utils/csv-parser'
 import { addDays } from '../utils/date-utils'
@@ -125,7 +126,7 @@ export const useProgrammeStore = create<ProgrammeState>((set, get) => ({
 
     // Persist recomputed dates to DB
     for (const a of result.activities) {
-      try { await repo.updateActivity(a.id, { startDate: a.startDate, finishDate: a.finishDate, earlyStart: a.earlyStart, earlyFinish: a.earlyFinish, lateStart: a.lateStart, lateFinish: a.lateFinish, totalFloat: a.totalFloat, isCritical: a.isCritical }) } catch {}
+      try { await db.activities.put(a as any) } catch {}
     }
 
     set({ activities: result.activities, scheduleResult: result })
