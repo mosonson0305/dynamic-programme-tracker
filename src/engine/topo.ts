@@ -1,8 +1,10 @@
 import type { Activity, Dependency } from '../models'
 
 export class CircularDependencyError extends Error {
-  constructor(activityIds: string[]) {
-    super(`Circular dependency detected involving: ${activityIds.join(' → ')}`)
+  constructor(activityIds: string[], activities: Activity[]) {
+    const wbsMap = new Map(activities.map(a => [a.id, a.wbsCode]))
+    const wbsCodes = activityIds.map(id => wbsMap.get(id) || id)
+    super(`Circular dependency detected involving: ${wbsCodes.join(' → ')}`)
     this.name = 'CircularDependencyError'
   }
 }
@@ -58,7 +60,7 @@ export function topologicalSort(activities: Activity[], dependencies: Dependency
     const remaining = activities
       .map((a) => a.id)
       .filter((id) => !result.includes(id))
-    throw new CircularDependencyError(remaining)
+    throw new CircularDependencyError(remaining, activities)
   }
 
   return result
