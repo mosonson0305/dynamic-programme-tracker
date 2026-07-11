@@ -69,15 +69,22 @@ export const useProgrammeStore = create<ProgrammeState>((set, get) => ({
           type: 'imported',
           createdAt: new Date().toISOString().slice(0, 10),
           snapshot: {
-            activities: parsed.activities.map(a => ({
-              id: a.id,
-              wbsCode: a.wbsCode,
-              name: a.name,
-              duration: a.duration,
-              startDate: a.startDate || '',
-              finishDate: a.finishDate || '',
-              isCritical: false,
-            })),
+            activities: parsed.activities.map(a => {
+              // Compute finish date from start + duration if only start provided
+              const start = a.startDate || ''
+              const finish = a.finishDate || (
+                start ? new Date(new Date(start + 'T00:00:00').getTime() + (a.duration * 86400000)).toISOString().slice(0, 10) : ''
+              )
+              return {
+                id: a.id,
+                wbsCode: a.wbsCode,
+                name: a.name,
+                duration: a.duration,
+                startDate: start,
+                finishDate: finish,
+                isCritical: false,
+              }
+            }),
           },
         }
         await repo.createBaseline(baseline)
