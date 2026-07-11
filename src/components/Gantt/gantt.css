@@ -1,0 +1,16 @@
+.gantt-container {
+  overflow: auto;
+}
+
+.gantt .bar-label {
+  fill: #fff;
+  font-size: 11px;
+}
+
+.critical .bar-progress {
+  fill: #ef4444 !important;
+}
+
+.milestone .bar-progress {
+  fill: #8b5cf6 !important;
+}
