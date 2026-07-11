@@ -63,17 +63,6 @@ export function schedule(
   const floatInfo = calculateFloat(cloned, earlyDates, lateDates)
   const criticalPath = identifyCriticalPath(cloned, floatInfo)
 
-  // DEBUG: log to console
-  console.log('[CPM DEBUG] projectFinish:', projectFinish, 'start:', start)
-  console.log('[CPM DEBUG] Top 5 activities:')
-  for (const a of cloned.slice(0, 8)) {
-    const e = earlyDates.get(a.id)
-    const l = lateDates.get(a.id)
-    const f = floatInfo.get(a.id)
-    console.log(`  ${a.wbsCode} ES=${e?.earlyStart} EF=${e?.earlyFinish} LS=${l?.lateStart} LF=${l?.lateFinish} float=${f?.totalFloat} crit=${f?.isCritical}`)
-  }
-  console.log('[CPM DEBUG] CP length:', criticalPath.length)
-
   for (const a of cloned) {
     const early = earlyDates.get(a.id)
     const late = lateDates.get(a.id)
