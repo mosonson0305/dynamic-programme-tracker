@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { forwardPass } from './cpm'
+import { forwardPass, backwardPass, calculateFloat, identifyCriticalPath } from './cpm'
 import type { Activity, Dependency } from '../models'
 
 function makeActivity(id: string, duration = 5, projectId = 'p1'): Activity {
@@ -202,5 +202,162 @@ describe('forwardPass', () => {
     // B SS+5: C.ES >= B.ES + 5 = 2026-07-01 + 5 = 2026-07-06
     // Max = 2026-07-11
     expect(result.get('C').earlyStart).toBe('2026-07-11')
+  })
+})
+
+describe('backwardPass', () => {
+  const projectStart = '2026-07-01'
+
+  it('sets late dates to project finish for terminal activities', () => {
+    const activities: Activity[] = [
+      makeActivity('A', 10),
+      makeActivity('B', 5),
+    ]
+    const deps: Dependency[] = [makeDep('d1', 'A', 'B', 'FS')]
+    const earlyDates = forwardPass(activities, deps, projectStart)
+    // A: 07-01 to 07-11, B: 07-11 to 07-16
+    const projectFinish = '2026-07-16'
+
+    const result = backwardPass(activities, deps, earlyDates, projectFinish)
+
+    // Terminal activity B: LS = LF - duration = 07-16 - 5 = 07-11
+    expect(result.get('B')).toEqual({
+      lateStart: '2026-07-11',
+      lateFinish: '2026-07-16',
+    })
+    // A: LF = B.LS = 07-11, LS = LF - 10 = 07-01
+    expect(result.get('A')).toEqual({
+      lateStart: '2026-07-01',
+      lateFinish: '2026-07-11',
+    })
+  })
+
+  it('handles multiple successors (min of successor late starts)', () => {
+    // A → B (5 days), A → C (15 days)
+    // Forward: A(07-01 to 07-11), B(07-11 to 07-16), C(07-11 to 07-26)
+    const activities: Activity[] = [
+      makeActivity('A', 10),
+      makeActivity('B', 5),
+      makeActivity('C', 15),
+    ]
+    const deps: Dependency[] = [
+      makeDep('d1', 'A', 'B', 'FS'),
+      makeDep('d2', 'A', 'C', 'FS'),
+    ]
+    const earlyDates = forwardPass(activities, deps, projectStart)
+    // B finishes 07-16, C finishes 07-26 → projectFinish = 07-26
+    const projectFinish = '2026-07-26'
+
+    const result = backwardPass(activities, deps, earlyDates, projectFinish)
+
+    // C (terminal): LS = 07-26 - 15 = 07-11
+    expect(result.get('C').lateStart).toBe('2026-07-11')
+    // B (terminal): LS = 07-26 - 5 = 07-21 (must finish by project finish)
+    expect(result.get('B').lateStart).toBe('2026-07-21')
+    // A: LF = min(B.LS, C.LS) = min(07-21, 07-11) = 07-11
+    expect(result.get('A').lateFinish).toBe('2026-07-11')
+    expect(result.get('A').lateStart).toBe('2026-07-01')
+  })
+})
+
+describe('calculateFloat', () => {
+  it('returns zero float for all activities in simple chain', () => {
+    const activities: Activity[] = [
+      makeActivity('A', 10),
+      makeActivity('B', 5),
+      makeActivity('C', 3),
+    ]
+    const deps: Dependency[] = [
+      makeDep('d1', 'A', 'B', 'FS'),
+      makeDep('d2', 'B', 'C', 'FS'),
+    ]
+    const earlyDates = forwardPass(activities, deps, '2026-07-01')
+    const projectFinish = forwardPass(activities, deps, '2026-07-01').get('C')!.earlyFinish
+    const lateDates = backwardPass(activities, deps, earlyDates, projectFinish)
+
+    const float = calculateFloat(activities, earlyDates, lateDates)
+
+    expect(float.get('A')!.totalFloat).toBe(0)
+    expect(float.get('A')!.isCritical).toBe(true)
+    expect(float.get('B')!.totalFloat).toBe(0)
+    expect(float.get('B')!.isCritical).toBe(true)
+    expect(float.get('C')!.totalFloat).toBe(0)
+    expect(float.get('C')!.isCritical).toBe(true)
+  })
+
+  it('returns positive float for shorter branch', () => {
+    // A(10) → C(5)
+    // B(3)  → C(5)  (B is shorter, has float)
+    const activities: Activity[] = [
+      makeActivity('A', 10),
+      makeActivity('B', 3),
+      makeActivity('C', 5),
+    ]
+    const deps: Dependency[] = [
+      makeDep('d1', 'A', 'C', 'FS'),
+      makeDep('d2', 'B', 'C', 'FS'),
+    ]
+    const earlyDates = forwardPass(activities, deps, '2026-07-01')
+    const projectFinish = earlyDates.get('C')!.earlyFinish
+    const lateDates = backwardPass(activities, deps, earlyDates, projectFinish)
+
+    const float = calculateFloat(activities, earlyDates, lateDates)
+
+    // A: long path, critical
+    expect(float.get('A')!.totalFloat).toBe(0)
+    expect(float.get('A')!.isCritical).toBe(true)
+    // C: also critical (on longest path)
+    expect(float.get('C')!.totalFloat).toBe(0)
+    expect(float.get('C')!.isCritical).toBe(true)
+    // B: shorter, has float
+    expect(float.get('B')!.totalFloat).toBeGreaterThan(0)
+    expect(float.get('B')!.isCritical).toBe(false)
+  })
+})
+
+describe('identifyCriticalPath', () => {
+  it('returns all activities in order for simple chain', () => {
+    const activities: Activity[] = [
+      makeActivity('A', 10),
+      makeActivity('B', 5),
+      makeActivity('C', 3),
+    ]
+    const deps: Dependency[] = [
+      makeDep('d1', 'A', 'B', 'FS'),
+      makeDep('d2', 'B', 'C', 'FS'),
+    ]
+    const earlyDates = forwardPass(activities, deps, '2026-07-01')
+    const projectFinish = earlyDates.get('C')!.earlyFinish
+    const lateDates = backwardPass(activities, deps, earlyDates, projectFinish)
+    const float = calculateFloat(activities, earlyDates, lateDates)
+
+    const path = identifyCriticalPath(activities, float)
+
+    expect(path).toEqual(['A', 'B', 'C'])
+  })
+
+  it('returns only the longest path when there are branches', () => {
+    // A(10) → C(5)   [critical: total 15]
+    // B(3)  → C(5)   [non-critical: total 8]
+    const activities: Activity[] = [
+      makeActivity('A', 10),
+      makeActivity('B', 3),
+      makeActivity('C', 5),
+    ]
+    const deps: Dependency[] = [
+      makeDep('d1', 'A', 'C', 'FS'),
+      makeDep('d2', 'B', 'C', 'FS'),
+    ]
+    const earlyDates = forwardPass(activities, deps, '2026-07-01')
+    const projectFinish = earlyDates.get('C')!.earlyFinish
+    const lateDates = backwardPass(activities, deps, earlyDates, projectFinish)
+    const float = calculateFloat(activities, earlyDates, lateDates)
+
+    const path = identifyCriticalPath(activities, float)
+
+    expect(path).toContain('A')
+    expect(path).toContain('C')
+    expect(path).not.toContain('B')
+    expect(path).toEqual(['A', 'C'])
   })
 })
