@@ -41,9 +41,14 @@ export default function WBSTree() {
     else if (pct > 0) status = 'in_progress'
     else status = 'not_started'
 
-    // Use put() to ensure id field is present (Dexie update fails if record missing)
+    // Always include id in the put object
     const existing = await db.activities.get(editId)
-    const merged = { ...existing, startDate: editStart || null, finishDate: editFinish || null, percentComplete: pct, status }
+    const base = existing || { id: editId, projectId: '', wbsCode: '', name: '', parentId: null, duration: 0,
+      startDate: null, finishDate: null, actualStart: null, actualFinish: null,
+      percentComplete: 0, earlyStart: null, earlyFinish: null, lateStart: null, lateFinish: null,
+      totalFloat: 0, isCritical: false, isMilestone: false, constraintType: 'ASAP', constraintDate: null,
+      status: 'not_started', wbsLevel: 1, bimRef: null, createdAt: '', updatedAt: '' }
+    const merged = { ...base, startDate: editStart || null, finishDate: editFinish || null, percentComplete: pct, status }
     await db.activities.put(merged as any)
 
     // Re-schedule to propagate changes
