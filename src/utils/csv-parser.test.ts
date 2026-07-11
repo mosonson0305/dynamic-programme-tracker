@@ -96,4 +96,44 @@ describe('parseProgrammeCSV', () => {
     // Only valid dep from 99->2 should be skipped
     expect(result.dependencies).toHaveLength(0)
   })
+
+  it('parses tab-delimited MS Project export', () => {
+    const tsv = [
+      'ID\tActivity Name\tDuration\tStart Date\t\tFinish Date',
+      '1\tDesign Phase\t30 days\tMon 10/08/26\t\tFri 08/09/26',
+      '2\tFoundation\t60 days\tMon 10/08/26\t\tFri 30/10/26',
+    ].join('\n')
+    const result = parseProgrammeCSV(tsv)
+    expect(result.activities).toHaveLength(2)
+    expect(result.activities[0].name).toBe('Design Phase')
+    expect(result.activities[0].duration).toBe(30)
+    expect(result.activities[0].startDate).toBe('2026-08-10') // 10/08/2026
+    expect(result.activities[0].finishDate).toBe('2026-09-08') // 08/09/2026
+    expect(result.activities[0].wbsCode).toBe('1')
+  })
+
+  it('parses duration with days suffix', () => {
+    const csv = `WBS Code,Activity Name,Duration
+1,Task A,152 days
+2,Task B,"1 day"
+3,Task C,40 days
+`
+    const result = parseProgrammeCSV(csv)
+    expect(result.activities[0].duration).toBe(152)
+    expect(result.activities[1].duration).toBe(1)
+    expect(result.activities[2].duration).toBe(40)
+  })
+
+  it('parses various date formats', () => {
+    const csv = `ID,Activity Name,Duration,Start Date,Finish Date
+1,Task A,10,Mon 10/08/26,Fri 22/08/26
+2,Task B,5,15/12/2026,20/12/2026
+3,Task C,3,2026-01-15,2026-01-18
+`
+    const result = parseProgrammeCSV(csv)
+    expect(result.activities[0].startDate).toBe('2026-08-10')
+    expect(result.activities[0].finishDate).toBe('2026-08-22')
+    expect(result.activities[1].startDate).toBe('2026-12-15')
+    expect(result.activities[2].startDate).toBe('2026-01-15')
+  })
 })
