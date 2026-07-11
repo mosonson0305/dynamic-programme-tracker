@@ -20,4 +20,4 @@ WBS Code,Activity Name,Duration,Start Date,Finish Date,Predecessors,Relation,Lag
 3.5,Internal Finishes,70,,,3.4,FS,0,,,,0
 3.6,External Works,45,,,3.5,FF,-10,,,,0
 3.TC,Testing & Commissioning,20,,,3.5,FS,0,SNET,2027-04-15,,0
-3.HO,Handover,1,,,3.TC,FS,0,,,,Y,0
+3.HO,Handover,1,,,3.TC,FS,0,,,Y,0

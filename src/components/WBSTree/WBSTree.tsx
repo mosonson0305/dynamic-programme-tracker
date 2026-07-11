@@ -10,6 +10,7 @@ export default function WBSTree() {
   const [editFinish, setEditFinish] = useState('')
   const [editPct, setEditPct] = useState('0')
   const [editStatus, setEditStatus] = useState('')
+  const [editMilestone, setEditMilestone] = useState(false)
 
   const toggle = (wbs: string) => {
     const next = new Set(expanded)
@@ -30,6 +31,7 @@ export default function WBSTree() {
     setEditFinish(a.finishDate || '')
     setEditPct(String(a.percentComplete))
     setEditStatus(a.status)
+    setEditMilestone(a.isMilestone)
   }
 
   const saveEdit = async () => {
@@ -48,7 +50,7 @@ export default function WBSTree() {
         percentComplete: 0, earlyStart: null, earlyFinish: null, lateStart: null, lateFinish: null,
         totalFloat: 0, isCritical: false, isMilestone: false, constraintType: 'ASAP', constraintDate: null,
         status: 'not_started', wbsLevel: 1, bimRef: null, createdAt: '', updatedAt: '' }
-      const merged = { ...base, startDate: editStart || null, finishDate: editFinish || null, percentComplete: pct, status }
+      const merged = { ...base, startDate: editStart || null, finishDate: editFinish || null, percentComplete: pct, status, isMilestone: editMilestone }
       await db.activities.put(merged as any)
 
       // Update store in-memory directly
@@ -56,8 +58,7 @@ export default function WBSTree() {
       const idx = store.activities.findIndex(a => a.id === editId)
       if (idx >= 0) {
         const updated = [...store.activities]
-        updated[idx] = { ...updated[idx], startDate: editStart || null, finishDate: editFinish || null, percentComplete: pct, status }
-        console.log('[WBS EDIT] before:', store.activities[idx].finishDate, 'after:', updated[idx].finishDate, 'total activities:', updated.length)
+        updated[idx] = { ...updated[idx], startDate: editStart || null, finishDate: editFinish || null, percentComplete: pct, status, isMilestone: editMilestone }
         useProgrammeStore.setState({ activities: updated })
       } else {
         console.log('[WBS EDIT] activity not found in store! editId:', editId)
@@ -160,6 +161,11 @@ export default function WBSTree() {
                     <option value="completed">Completed</option>
                     <option value="delayed">Delayed</option>
                   </select>
+                </div>
+                <div className="flex items-center gap-2">
+                  <input type="checkbox" id="isMilestone" checked={editMilestone} onChange={e => setEditMilestone(e.target.checked)}
+                    className="rounded" />
+                  <label htmlFor="isMilestone" className="text-sm text-gray-600">Mark as Milestone</label>
                 </div>
               </div>
 
