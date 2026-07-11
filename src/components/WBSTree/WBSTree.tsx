@@ -51,11 +51,13 @@ export default function WBSTree() {
       const merged = { ...base, startDate: editStart || null, finishDate: editFinish || null, percentComplete: pct, status }
       await db.activities.put(merged as any)
 
-      // Reload from DB to get fresh data, then re-schedule
-      const { loadFromDB } = useProgrammeStore.getState()
-      const project = useProgrammeStore.getState().project
-      if (project) {
-        await loadFromDB(project.id)
+      // Update store in-memory directly (don't re-run CPM — user edits are manual)
+      const store = useProgrammeStore.getState()
+      const idx = store.activities.findIndex(a => a.id === editId)
+      if (idx >= 0) {
+        const updated = [...store.activities]
+        updated[idx] = { ...updated[idx], startDate: editStart || null, finishDate: editFinish || null, percentComplete: pct, status }
+        useProgrammeStore.setState({ activities: updated })
       }
       setEditId(null)
     } catch (e: any) {
