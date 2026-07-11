@@ -3,6 +3,7 @@ import type { Activity, Dependency, Baseline, Project } from '../models'
 import { IndexedDBRepository } from '../data/indexeddb-repo'
 import { schedule, type ScheduleResult } from '../engine/scheduler'
 import { parseProgrammeCSV } from '../utils/csv-parser'
+import { addDays } from '../utils/date-utils'
 
 interface ProgrammeState {
   // Data
@@ -73,7 +74,7 @@ export const useProgrammeStore = create<ProgrammeState>((set, get) => ({
               // Compute finish date from start + duration if only start provided
               const start = a.startDate || ''
               const finish = a.finishDate || (
-                start ? new Date(new Date(start + 'T00:00:00').getTime() + (a.duration * 86400000)).toISOString().slice(0, 10) : ''
+                start ? addDays(start, a.duration) : ''
               )
               return {
                 id: a.id,
