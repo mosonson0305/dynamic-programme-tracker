@@ -67,15 +67,19 @@ export function schedule(
       a.earlyStart = early.earlyStart
       a.earlyFinish = early.earlyFinish
 
-      // If this activity has a manual SNET date, keep startDate locked.
-      // Downstream activities (those depending on this one) have already
-      // been recalculated by the forward pass from the SNET date,
-      // so the dependency chain automatically propagates the change.
+      // If this activity has a manual SNET date, preserve both
+      // startDate and finishDate so the user's edit is retained.
+      // Downstream activities have already been recalculated.
       const manualDate = manualStartDates.get(a.id)
       if (manualDate) {
+        const origAct = activities.find(act => act.id === a.id)
         a.startDate = manualDate
-        // Finish = start + duration (CPM-computed, respects propagation)
-        a.finishDate = early.earlyFinish
+        // Preserve manual finish if explicitly set, else CPM-computed
+        if (origAct?.finishDate && origAct.finishDate !== early.earlyFinish) {
+          a.finishDate = origAct.finishDate
+        } else {
+          a.finishDate = early.earlyFinish
+        }
       } else {
         a.startDate = early.earlyStart
         a.finishDate = early.earlyFinish

@@ -68,16 +68,30 @@ export default function WBSTree() {
           }
         }
 
-        // Lock only the currently-edited activity
+        // Lock the currently-edited activity
+        // If user edited startDate: SNET (start = fixed, finish = start + dur)
+        // If user edited ONLY finishDate: back-calc start = finish - dur
+        let lockStart = editStart || null
+        let lockFinish = editFinish || null
+        const orig = updated[idx]
+
+        if (!editStart && editFinish && editFinish !== orig.finishDate) {
+          // Only finishDate changed — back-calculate start
+          const finishTs = new Date(editFinish + 'T00:00:00Z').getTime()
+          const startTs = finishTs - (orig.duration || 1) * 86400000
+          lockStart = new Date(startTs).toISOString().slice(0, 10)
+          lockFinish = editFinish
+        }
+
         updated[idx] = {
-          ...updated[idx],
-          startDate: editStart || null,
-          finishDate: editFinish || null,
+          ...orig,
+          startDate: lockStart,
+          finishDate: lockFinish,
           percentComplete: pct,
           status,
           isMilestone: editMilestone,
-          constraintType: editStart ? 'SNET' : 'ASAP',
-          constraintDate: editStart || null,
+          constraintType: lockStart ? 'SNET' : 'ASAP',
+          constraintDate: lockStart || null,
         }
 
         const { dependencies } = useProgrammeStore.getState()
