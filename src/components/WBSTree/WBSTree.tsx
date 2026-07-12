@@ -12,6 +12,7 @@ export default function WBSTree() {
   const [editPct, setEditPct] = useState('0')
   const [editStatus, setEditStatus] = useState('')
   const [editMilestone, setEditMilestone] = useState(false)
+  const [showAll, setShowAll] = useState(false)
 
   const toggle = (wbs: string) => {
     const next = new Set(expanded)
@@ -54,29 +55,22 @@ export default function WBSTree() {
       const merged = { ...base, startDate: editStart || null, finishDate: editFinish || null, percentComplete: pct, status, isMilestone: editMilestone }
       await db.activities.put(merged as any)
 
-      // Clear SNET from ALL other activities so CPM can recalculate
-      // the dependency chain freely. Only the current edit keeps its lock.
       const store = useProgrammeStore.getState()
       const idx = store.activities.findIndex(a => a.id === editId)
       if (idx >= 0) {
         const updated = [...store.activities]
 
-        // Free all activities from previous SNET locks
         for (let i = 0; i < updated.length; i++) {
           if (i !== idx) {
             updated[i] = { ...updated[i], constraintType: 'ASAP', constraintDate: null }
           }
         }
 
-        // Lock the currently-edited activity
-        // If user edited startDate: SNET (start = fixed, finish = start + dur)
-        // If user edited ONLY finishDate: back-calc start = finish - dur
         let lockStart = editStart || null
         let lockFinish = editFinish || null
         const orig = updated[idx]
 
         if (!editStart && editFinish && editFinish !== orig.finishDate) {
-          // Only finishDate changed — back-calculate start
           const finishTs = new Date(editFinish + 'T00:00:00Z').getTime()
           const startTs = finishTs - (orig.duration || 1) * 86400000
           lockStart = new Date(startTs).toISOString().slice(0, 10)
@@ -99,7 +93,6 @@ export default function WBSTree() {
         const projectStart = project?.dataDate || new Date().toISOString().slice(0, 10)
         const result = schedule(updated, dependencies, projectStart)
 
-        // Persist to DB
         for (const a of result.activities) {
           try { await db.activities.put(a as any) } catch {}
         }
@@ -133,16 +126,26 @@ export default function WBSTree() {
           {!hasKids && <span className="w-4 mr-1" />}
           <span className="font-mono text-gray-400 w-16">{act.wbsCode}</span>
           <span className="flex-1 truncate">{act.name}</span>
-          <span className="text-gray-500 w-24 text-right font-mono">{act.startDate?.slice(5) || '--'}</span>
-          <span className="text-gray-500 w-24 text-right font-mono">{act.finishDate?.slice(5) || '--'}</span>
-          <span className="text-gray-500 w-10 text-right">{act.percentComplete}%</span>
-          <span className="w-16 text-right">
-            <span className={`px-1.5 py-0.5 rounded text-xs font-medium ${
-              act.isCritical ? 'bg-red-100 text-red-700' : 'bg-blue-100 text-blue-600'
-            }`}>
-              {act.isCritical ? 'CP' : `${act.totalFloat}d`}
-            </span>
-          </span>
+          <span className="text-gray-500 w-10 text-right text-xs">{act.duration}d</span>
+          <span className="text-gray-500 w-22 text-right font-mono text-xs">{act.startDate?.slice(5) || '--'}</span>
+          <span className="text-gray-500 w-22 text-right font-mono text-xs">{act.finishDate?.slice(5) || '--'}</span>
+          <span className="text-gray-500 w-8 text-right">{act.percentComplete}%</span>
+          {showAll && (
+            <>
+              <span className="w-12 text-right">
+                <span className={`px-1 py-0.5 rounded text-xs font-medium ${
+                  act.isCritical ? 'bg-red-100 text-red-700' : 'bg-blue-100 text-blue-600'
+                }`}>
+                  {act.isCritical ? 'CP' : `${act.totalFloat}d`}
+                </span>
+              </span>
+              <span className="w-16 text-right text-gray-400 text-xs capitalize">{act.status.replace('_', ' ')}</span>
+              <span className="w-22 text-right font-mono text-xs text-gray-400">{act.earlyStart?.slice(5) || '--'}</span>
+              <span className="w-22 text-right font-mono text-xs text-gray-400">{act.earlyFinish?.slice(5) || '--'}</span>
+              <span className="w-22 text-right font-mono text-xs text-gray-400">{act.lateStart?.slice(5) || '--'}</span>
+              <span className="w-22 text-right font-mono text-xs text-gray-400">{act.lateFinish?.slice(5) || '--'}</span>
+            </>
+          )}
         </div>
         {hasKids && isExpanded && kids.map(k => renderRow(k, depth + 1))}
       </div>
@@ -155,7 +158,17 @@ export default function WBSTree() {
 
   return (
     <div className="p-6">
-      <h2 className="text-lg font-bold mb-3">WBS Tree</h2>
+      <div className="flex items-center justify-between mb-3">
+        <h2 className="text-lg font-bold">WBS Tree</h2>
+        <button
+          onClick={() => setShowAll(!showAll)}
+          className={`px-3 py-1 rounded text-xs font-medium transition-colors ${
+            showAll ? 'bg-purple-100 text-purple-700' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
+          }`}
+        >
+          {showAll ? '▲ Hide Details' : '▼ Show All Fields'}
+        </button>
+      </div>
       <p className="text-xs text-gray-400 mb-3">Click any row to edit dates and progress.</p>
 
       <div className="bg-white rounded-lg border border-gray-200 shadow-sm overflow-auto">
@@ -163,10 +176,20 @@ export default function WBSTree() {
           <span className="w-4 mr-1" />
           <span className="w-16">WBS</span>
           <span className="flex-1">Activity</span>
-          <span className="w-24 text-right">Start</span>
-          <span className="w-24 text-right">Finish</span>
-          <span className="w-10 text-right">%</span>
-          <span className="w-16 text-right">Float</span>
+          <span className="w-10 text-right">Dur</span>
+          <span className="w-22 text-right">Start</span>
+          <span className="w-22 text-right">Finish</span>
+          <span className="w-8 text-right">%</span>
+          {showAll && (
+            <>
+              <span className="w-12 text-right">Float</span>
+              <span className="w-16 text-right">Status</span>
+              <span className="w-22 text-right">ES</span>
+              <span className="w-22 text-right">EF</span>
+              <span className="w-22 text-right">LS</span>
+              <span className="w-22 text-right">LF</span>
+            </>
+          )}
         </div>
         {rootActs.map(a => renderRow(a))}
       </div>
