@@ -127,12 +127,25 @@ export default function WBSTree() {
     }
   }
 
-  // #1: When duration changes, auto-recalculate finish = start + duration
+  // When duration changes, auto-recalculate finish = start + duration
   const handleDurChange = (val: string) => {
     setEditDur(val)
     const dur = parseInt(val) || 0
     if (editStart && dur >= 0) {
       setEditFinish(addDays(editStart, dur))
+    }
+  }
+
+  // When finish changes, back-calculate duration = finish - start
+  const handleFinishChange = (val: string) => {
+    setEditFinish(val)
+    if (editStart && val) {
+      const startTs = new Date(editStart + 'T00:00:00Z').getTime()
+      const finishTs = new Date(val + 'T00:00:00Z').getTime()
+      const diffDays = Math.round((finishTs - startTs) / 86400000)
+      if (diffDays >= 0) {
+        setEditDur(String(diffDays))
+      }
     }
   }
 
@@ -187,34 +200,71 @@ export default function WBSTree() {
       // Build updated activity
       const newWbs = editWbs.trim() || orig.wbsCode
       const newName = editName.trim() || orig.name
-      const newDur = editMilestone ? 0 : dur
       const newStart = editStart || null
-      let newFinish = editFinish || null
+      const newFinish = editFinish || null
 
-      // #8: Ensure finish = start + duration if start is set
-      if (newStart && newDur >= 0) {
-        newFinish = addDays(newStart, newDur)
-      }
+      // Three-way date resolution:
+      // - Milestone: duration=0, finish=start
+      // - Start changed: duration stays, finish = start + duration
+      // - Finish changed: start stays, duration = finish - start
+      // - Duration changed: start stays, finish = start + duration
+      let finalDur: number
+      let finalStart = newStart
+      let finalFinish = newFinish
 
-      // Back-calc start if only finish provided
-      if (!newStart && newFinish && newDur > 0) {
-        // leave start null — CPM will compute
+      if (editMilestone) {
+        finalDur = 0
+        if (finalStart) finalFinish = finalStart
+      } else {
+        const origStart = orig.startDate || ''
+        const origFinish = orig.finishDate || ''
+        const origDur = orig.duration || 0
+
+        const startChanged = !!newStart && newStart !== origStart
+        const finishChanged = !!newFinish && newFinish !== origFinish
+        const durChanged = dur !== origDur
+
+        if (startChanged && !durChanged && !finishChanged) {
+          // Start moved → keep duration, recalc finish
+          finalDur = origDur
+          finalFinish = addDays(newStart!, origDur)
+        } else if (finishChanged && !durChanged && !startChanged) {
+          // Finish moved → keep start, recalc duration
+          finalStart = origStart || null
+          const startTs = new Date((origStart || newStart)! + 'T00:00:00Z').getTime()
+          const finishTs = new Date(newFinish! + 'T00:00:00Z').getTime()
+          finalDur = Math.max(0, Math.round((finishTs - startTs) / 86400000))
+        } else if (durChanged && !startChanged) {
+          // Duration changed → keep start, recalc finish
+          finalDur = dur
+          if (finalStart) finalFinish = addDays(finalStart, dur)
+        } else if (startChanged && durChanged) {
+          // Both start and duration changed → recalc finish
+          finalDur = dur
+          finalFinish = addDays(newStart!, dur)
+        } else {
+          // Nothing changed or all changed — use as-is
+          finalDur = dur
+          if (finalStart && finalDur >= 0) {
+            finalFinish = addDays(finalStart, finalDur)
+          }
+        }
       }
 
       updated[idx] = {
         ...orig,
         wbsCode: newWbs,
         name: newName,
-        duration: newDur,
-        startDate: newStart,
-        finishDate: newFinish,
+        duration: finalDur,
+        startDate: finalStart,
+        finishDate: finalFinish,
         percentComplete: pct,
         status,
         isMilestone: editMilestone,
         actualStart: editActualStart || null,
         actualFinish: editActualFinish || null,
-        constraintType: newStart ? 'SNET' : 'ASAP',
-        constraintDate: newStart || null,
+        constraintType: finalStart ? 'SNET' : 'ASAP',
+        constraintDate: finalStart || null,
       }
 
       // #6: Update dependencies — parse predecessors and rebuild
@@ -392,7 +442,7 @@ export default function WBSTree() {
                 </div>
                 <div>
                   <label className="text-xs text-gray-500">Finish Date</label>
-                  <input type="date" value={editFinish} onChange={e => setEditFinish(e.target.value)}
+                  <input type="date" value={editFinish} onChange={e => handleFinishChange(e.target.value)}
                     className="w-full border rounded px-2 py-1 text-sm mt-1" />
                 </div>
               </div>
