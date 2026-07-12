@@ -28,33 +28,24 @@ export function schedule(
 
   const cloned: Activity[] = activities.map((a) => ({ ...a }))
 
-  const hasDeps = new Set<string>()
-  for (const d of dependencies) {
-    hasDeps.add(d.successorId)
-  }
-
-  // For activities with NO dependencies that have dates but no explicit SNET,
-  // inject SNET so forward pass respects the imported start date.
-  const savedConstraints = new Map<string, { ct: string; cd: string | null }>()
+  // Track which activities have manually-set SNET (from WBS edit)
+  // These activities' startDate should be preserved, not overwritten by CPM.
+  const manualStartDates = new Map<string, string>()
   for (const a of cloned) {
-    if (!hasDeps.has(a.id) && a.startDate && a.constraintType !== 'SNET') {
-      savedConstraints.set(a.id, { ct: a.constraintType, cd: a.constraintDate })
-      a.constraintType = 'SNET'
-      a.constraintDate = a.startDate
+    if (a.constraintType === 'SNET' && a.constraintDate) {
+      manualStartDates.set(a.id, a.constraintDate)
+    } else if (!a.constraintType || a.constraintType === 'ASAP') {
+      // For activities with no deps and a startDate, inject SNET
+      const hasDeps = dependencies.some(d => d.successorId === a.id)
+      if (!hasDeps && a.startDate) {
+        manualStartDates.set(a.id, a.startDate)
+        a.constraintType = 'SNET'
+        a.constraintDate = a.startDate
+      }
     }
   }
-  // Activities already having SNET (manually edited) keep their constraint.
-  // forwardPass now honours SNET for ALL activities (with or without dependencies).
 
   const earlyDates = forwardPass(cloned, dependencies, start)
-
-  for (const a of cloned) {
-    const saved = savedConstraints.get(a.id)
-    if (saved) {
-      a.constraintType = saved.ct as Activity['constraintType']
-      a.constraintDate = saved.cd
-    }
-  }
 
   let projectFinish = start
   for (const [, ed] of earlyDates) {
@@ -73,10 +64,24 @@ export function schedule(
     const fi = floatInfo.get(a.id)
 
     if (early) {
-      a.startDate = early.earlyStart
-      a.finishDate = early.earlyFinish
       a.earlyStart = early.earlyStart
       a.earlyFinish = early.earlyFinish
+
+      // If this activity has a manual SNET date, keep it — don't let CPM overwrite
+      const manualDate = manualStartDates.get(a.id)
+      if (manualDate) {
+        a.startDate = manualDate
+        // Recalculate finish from manual start + duration
+        a.finishDate = early.earlyFinish
+        // But if manual finish was also set, use that
+        const origAct = activities.find(act => act.id === a.id)
+        if (origAct?.finishDate && origAct.finishDate !== early.earlyFinish) {
+          a.finishDate = origAct.finishDate
+        }
+      } else {
+        a.startDate = early.earlyStart
+        a.finishDate = early.earlyFinish
+      }
     }
 
     if (late) {
