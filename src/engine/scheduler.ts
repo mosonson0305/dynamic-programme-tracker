@@ -95,6 +95,13 @@ export function schedule(
     }
   }
 
+  // Also consider manual finishDates for projectFinish
+  for (const a of cloned) {
+    if (a.finishDate && a.finishDate > projectFinish) {
+      projectFinish = a.finishDate
+    }
+  }
+
   return {
     activities: cloned,
     criticalPath,
