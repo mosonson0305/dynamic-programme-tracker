@@ -76,6 +76,16 @@ export default function KPICards() {
       }
     }
 
+    // --- Delay: sum of (actualFinish - planned finish) for completed activities
+    let totalDelay = 0
+    for (const a of activities) {
+      if (a.actualFinish && a.finishDate && a.actualFinish > a.finishDate) {
+        const actual = new Date(a.actualFinish + 'T00:00:00Z').getTime()
+        const planned = new Date(a.finishDate + 'T00:00:00Z').getTime()
+        totalDelay += Math.round((actual - planned) / 86400000)
+      }
+    }
+
     // --- Milestones ---
     const milestones = activities.filter((a) => a.isMilestone)
     const milestoneCompleted = milestones.filter((a) => a.status === 'completed').length
@@ -98,12 +108,13 @@ export default function KPICards() {
       milestoneCompleted,
       milestoneTotal,
       milestonePct,
+      totalDelay,
       milestoneDue,
     }
   }, [activities, baselines, scheduleResult])
 
   return (
-    <div className="grid grid-cols-4 gap-4">
+    <div className="grid grid-cols-5 gap-4">
       {/* Overall % Complete */}
       <div className="bg-white border rounded-lg p-4">
         <div className="text-sm text-gray-500 mb-1">Overall % Complete</div>
@@ -148,6 +159,15 @@ export default function KPICards() {
             <div className="text-xs text-yellow-500 mt-1">Need baseline</div>
           </>
         )}
+      </div>
+
+      {/* Total Delay */}
+      <div className="bg-white border rounded-lg p-4">
+        <div className="text-sm text-gray-500 mb-1">Total Delay</div>
+        <div className={`text-3xl font-bold ${kpis.totalDelay > 0 ? 'text-red-500' : 'text-green-600'}`}>
+          {kpis.totalDelay > 0 ? '+' : ''}{kpis.totalDelay}d
+        </div>
+        <div className="text-xs text-gray-400 mt-1">Actual vs planned</div>
       </div>
 
       {/* Milestones */}

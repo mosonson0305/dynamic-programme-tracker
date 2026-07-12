@@ -149,6 +149,35 @@ export default function WBSTree() {
     }
   }
 
+  // Actual Start set → auto-derive status = in_progress
+  const handleActualStartChange = (val: string) => {
+    setEditActualStart(val)
+    if (val && !statusManuallySet) {
+      const pct = parseInt(editPct) || 0
+      if (pct < 100) setEditStatus('in_progress')
+    }
+  }
+
+  // Actual Finish set → auto % = 100, status = completed, finish = actual finish
+  const handleActualFinishChange = (val: string) => {
+    setEditActualFinish(val)
+    if (val) {
+      if (!statusManuallySet) setEditStatus('completed')
+      setEditPct('100')
+      // Also update planned finish to match actual if finish was empty or earlier
+      if (!editFinish || val > editFinish) {
+        setEditFinish(val)
+      }
+    } else {
+      // Cleared actual finish → revert status if not manually set
+      if (!statusManuallySet) {
+        const pct = parseInt(editPct) || 0
+        if (pct >= 100) setEditPct('99')
+        setEditStatus(editActualStart ? 'in_progress' : 'not_started')
+      }
+    }
+  }
+
   // #2: Milestone toggle forces duration to 0
   const handleMilestoneToggle = (checked: boolean) => {
     setEditMilestone(checked)
@@ -176,15 +205,25 @@ export default function WBSTree() {
 
   const saveEdit = async () => {
     if (!editId) return
-    const pct = parseInt(editPct) || 0
+    let pct = parseInt(editPct) || 0
     const dur = parseInt(editDur) || 0
     let status: any = editStatus
 
-    // #4: Auto-derive status only if user hasn't manually overridden
+    // Auto-derive from actual dates (highest priority unless manually overridden)
     if (!statusManuallySet) {
-      if (pct >= 100) status = 'completed'
-      else if (pct > 0) status = 'in_progress'
-      else status = 'not_started'
+      if (editActualFinish) {
+        status = 'completed'
+        pct = 100
+      } else if (editActualStart) {
+        status = 'in_progress'
+        if (pct === 0) pct = 1  // in-progress must have >0%
+      } else if (pct >= 100) {
+        status = 'completed'
+      } else if (pct > 0) {
+        status = 'in_progress'
+      } else {
+        status = 'not_started'
+      }
     }
 
     try {
@@ -450,12 +489,12 @@ export default function WBSTree() {
               <div className="grid grid-cols-2 gap-3 mb-3">
                 <div>
                   <label className="text-xs text-gray-500">Actual Start</label>
-                  <input type="date" value={editActualStart} onChange={e => setEditActualStart(e.target.value)}
+                  <input type="date" value={editActualStart} onChange={e => handleActualStartChange(e.target.value)}
                     className="w-full border rounded px-2 py-1 text-sm mt-1" />
                 </div>
                 <div>
                   <label className="text-xs text-gray-500">Actual Finish</label>
-                  <input type="date" value={editActualFinish} onChange={e => setEditActualFinish(e.target.value)}
+                  <input type="date" value={editActualFinish} onChange={e => handleActualFinishChange(e.target.value)}
                     className="w-full border rounded px-2 py-1 text-sm mt-1" />
                 </div>
               </div>
