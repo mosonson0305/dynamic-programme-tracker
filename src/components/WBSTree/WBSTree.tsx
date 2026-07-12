@@ -54,12 +54,21 @@ export default function WBSTree() {
       const merged = { ...base, startDate: editStart || null, finishDate: editFinish || null, percentComplete: pct, status, isMilestone: editMilestone }
       await db.activities.put(merged as any)
 
-      // Update store then re-run CPM with SNET to preserve manual dates
+      // Clear SNET from ALL other activities so CPM can recalculate
+      // the dependency chain freely. Only the current edit keeps its lock.
       const store = useProgrammeStore.getState()
       const idx = store.activities.findIndex(a => a.id === editId)
       if (idx >= 0) {
         const updated = [...store.activities]
-        // Set SNET constraint so CPM preserves the manual start date
+
+        // Free all activities from previous SNET locks
+        for (let i = 0; i < updated.length; i++) {
+          if (i !== idx) {
+            updated[i] = { ...updated[i], constraintType: 'ASAP', constraintDate: null }
+          }
+        }
+
+        // Lock only the currently-edited activity
         updated[idx] = {
           ...updated[idx],
           startDate: editStart || null,
@@ -67,7 +76,7 @@ export default function WBSTree() {
           percentComplete: pct,
           status,
           isMilestone: editMilestone,
-          constraintType: editStart ? 'SNET' : updated[idx].constraintType,
+          constraintType: editStart ? 'SNET' : 'ASAP',
           constraintDate: editStart || null,
         }
 
