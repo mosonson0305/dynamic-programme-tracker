@@ -15,18 +15,18 @@ interface ColDef {
 }
 
 const DEFAULT_COLS: ColDef[] = [
-  { key: 'wbs', label: 'WBS', width: 64, visible: true, optional: false },
-  { key: 'name', label: 'Activity', width: 999, visible: true, optional: false },
-  { key: 'dur', label: 'Dur', width: 40, visible: true, optional: false },
-  { key: 'start', label: 'Start', width: 88, visible: true, optional: false },
-  { key: 'finish', label: 'Finish', width: 88, visible: true, optional: false },
-  { key: 'pct', label: '%', width: 36, visible: true, optional: false },
-  { key: 'float', label: 'Float', width: 56, visible: false, optional: true },
-  { key: 'status', label: 'Status', width: 72, visible: false, optional: true },
-  { key: 'es', label: 'ES', width: 88, visible: false, optional: true },
-  { key: 'ef', label: 'EF', width: 88, visible: false, optional: true },
-  { key: 'ls', label: 'LS', width: 88, visible: false, optional: true },
-  { key: 'lf', label: 'LF', width: 88, visible: false, optional: true },
+  { key: 'wbs', label: 'WBS Code', width: 76, visible: true, optional: false },
+  { key: 'name', label: 'Activity Name', width: 999, visible: true, optional: false },
+  { key: 'dur', label: 'Duration', width: 64, visible: true, optional: false },
+  { key: 'start', label: 'Start Date', width: 90, visible: true, optional: false },
+  { key: 'finish', label: 'Finish Date', width: 90, visible: true, optional: false },
+  { key: 'pct', label: 'Percent', width: 56, visible: true, optional: false },
+  { key: 'float', label: 'Float (Days)', width: 72, visible: false, optional: true },
+  { key: 'status', label: 'Status', width: 80, visible: false, optional: true },
+  { key: 'es', label: 'Early Start', width: 90, visible: false, optional: true },
+  { key: 'ef', label: 'Early Finish', width: 90, visible: false, optional: true },
+  { key: 'ls', label: 'Late Start', width: 90, visible: false, optional: true },
+  { key: 'lf', label: 'Late Finish', width: 90, visible: false, optional: true },
 ]
 
 export default function WBSTree() {
@@ -188,7 +188,7 @@ export default function WBSTree() {
               {col.key === 'name' ? (
                 <span className="truncate block">{act.name}</span>
               ) : (
-                <span className="text-right block">{renderCell(act, col.key)}</span>
+                <span className="text-center block">{renderCell(act, col.key)}</span>
               )}
             </div>
           ))}
@@ -234,7 +234,7 @@ export default function WBSTree() {
         <div className="flex items-center py-2 px-2 bg-gray-50 border-b font-semibold text-xs text-gray-500 sticky top-0 z-10">
           <span className="w-4 mr-1 flex-shrink-0" />
           {visibleCols.map(col => (
-            <div key={col.key} className="flex-shrink-0 text-right overflow-hidden relative group"
+            <div key={col.key} className="flex-shrink-0 text-center overflow-hidden relative group"
               style={{ width: col.width === 999 ? undefined : col.width, flex: col.width === 999 ? '1 1 0%' : undefined }}>
               <span>{col.label}</span>
               {/* Resize handle */}
