@@ -33,14 +33,18 @@ export function schedule(
     hasDeps.add(d.successorId)
   }
 
+  // For activities with NO dependencies that have dates but no explicit SNET,
+  // inject SNET so forward pass respects the imported start date.
   const savedConstraints = new Map<string, { ct: string; cd: string | null }>()
   for (const a of cloned) {
-    if (!hasDeps.has(a.id) && a.startDate) {
+    if (!hasDeps.has(a.id) && a.startDate && a.constraintType !== 'SNET') {
       savedConstraints.set(a.id, { ct: a.constraintType, cd: a.constraintDate })
       a.constraintType = 'SNET'
       a.constraintDate = a.startDate
     }
   }
+  // Activities already having SNET (manually edited) keep their constraint.
+  // forwardPass now honours SNET for ALL activities (with or without dependencies).
 
   const earlyDates = forwardPass(cloned, dependencies, start)
 

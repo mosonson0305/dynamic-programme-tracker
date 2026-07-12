@@ -54,29 +54,33 @@ export default function WBSTree() {
       const merged = { ...base, startDate: editStart || null, finishDate: editFinish || null, percentComplete: pct, status, isMilestone: editMilestone }
       await db.activities.put(merged as any)
 
-      // Update store then re-run CPM with the new data
+      // Update store then re-run CPM with SNET to preserve manual dates
       const store = useProgrammeStore.getState()
       const idx = store.activities.findIndex(a => a.id === editId)
       if (idx >= 0) {
         const updated = [...store.activities]
-        updated[idx] = { ...updated[idx], startDate: editStart || null, finishDate: editFinish || null, percentComplete: pct, status, isMilestone: editMilestone }
+        // Set SNET constraint so CPM preserves the manual start date
+        updated[idx] = {
+          ...updated[idx],
+          startDate: editStart || null,
+          finishDate: editFinish || null,
+          percentComplete: pct,
+          status,
+          isMilestone: editMilestone,
+          constraintType: editStart ? 'SNET' : updated[idx].constraintType,
+          constraintDate: editStart || null,
+        }
 
-        // Update activities in store first
-        useProgrammeStore.setState({ activities: updated })
-
-        // Then re-run CPM to update scheduleResult (CP, dates, float)
-        // Scheduler preserves manual dates via SNET for codeless activities
         const { dependencies } = useProgrammeStore.getState()
         const project = useProgrammeStore.getState().project
         const projectStart = project?.dataDate || new Date().toISOString().slice(0, 10)
         const result = schedule(updated, dependencies, projectStart)
 
-        // Persist recomputed activities to DB
+        // Persist to DB
         for (const a of result.activities) {
           try { await db.activities.put(a as any) } catch {}
         }
 
-        // Update store with CPM results — this triggers ALL Dashboard components
         useProgrammeStore.setState({
           activities: result.activities,
           scheduleResult: result,
