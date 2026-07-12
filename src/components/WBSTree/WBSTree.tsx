@@ -2,6 +2,7 @@ import { useState, useCallback, useRef } from 'react'
 import { useProgrammeStore } from '../../store/programmeStore'
 import { db } from '../../data/db'
 import { schedule } from '../../engine/scheduler'
+import { addDays } from '../../utils/date-utils'
 import type { Activity } from '../../models'
 
 type ColKey = 'wbs' | 'name' | 'dur' | 'start' | 'finish' | 'pct' | 'float' | 'status' | 'es' | 'ef' | 'ls' | 'lf'
@@ -32,15 +33,24 @@ const DEFAULT_COLS: ColDef[] = [
 export default function WBSTree() {
   const { activities } = useProgrammeStore()
   const [expanded, setExpanded] = useState<Set<string>>(new Set(activities.filter(a => a.wbsLevel === 1).map(a => a.wbsCode)))
-  const [editId, setEditId] = useState<string | null>(null)
-  const [editStart, setEditStart] = useState('')
-  const [editFinish, setEditFinish] = useState('')
-  const [editPct, setEditPct] = useState('0')
-  const [editStatus, setEditStatus] = useState('')
-  const [editMilestone, setEditMilestone] = useState(false)
   const [cols, setCols] = useState<ColDef[]>(DEFAULT_COLS)
   const [colMenuOpen, setColMenuOpen] = useState(false)
   const resizing = useRef<{ key: ColKey; startX: number; startW: number } | null>(null)
+
+  // Edit modal state
+  const [editId, setEditId] = useState<string | null>(null)
+  const [editWbs, setEditWbs] = useState('')
+  const [editName, setEditName] = useState('')
+  const [editDur, setEditDur] = useState('0')
+  const [editStart, setEditStart] = useState('')
+  const [editFinish, setEditFinish] = useState('')
+  const [editPct, setEditPct] = useState('0')
+  const [editStatus, setEditStatus] = useState('not_started')
+  const [editMilestone, setEditMilestone] = useState(false)
+  const [editActualStart, setEditActualStart] = useState('')
+  const [editActualFinish, setEditActualFinish] = useState('')
+  const [editPreds, setEditPreds] = useState('')
+  const [statusManuallySet, setStatusManuallySet] = useState(false)
 
   const toggleCol = (key: ColKey) => {
     setCols(prev => prev.map(c => c.key === key ? { ...c, visible: !c.visible } : c))
@@ -88,60 +98,165 @@ export default function WBSTree() {
     const a = activities.find(x => x.id === id)
     if (!a) return
     setEditId(id)
+    setEditWbs(a.wbsCode)
+    setEditName(a.name)
+    setEditDur(String(a.duration))
     setEditStart(a.startDate || '')
     setEditFinish(a.finishDate || '')
     setEditPct(String(a.percentComplete))
     setEditStatus(a.status)
     setEditMilestone(a.isMilestone)
+    setEditActualStart(a.actualStart || '')
+    setEditActualFinish(a.actualFinish || '')
+    setStatusManuallySet(false)
+
+    // #6: Load current predecessors from dependencies
+    const { dependencies } = useProgrammeStore.getState()
+    const wbsToId = new Map(activities.map(act => [act.id, act.wbsCode]))
+    const preds = dependencies.filter(d => d.successorId === id)
+    const predWbsCodes = preds.map(d => wbsToId.get(d.predecessorId) || d.predecessorId)
+    setEditPreds(predWbsCodes.join('; '))
+  }
+
+  // #8: When start changes, auto-recalculate finish = start + duration
+  const handleStartChange = (val: string) => {
+    setEditStart(val)
+    const dur = parseInt(editDur) || 0
+    if (val && dur > 0) {
+      setEditFinish(addDays(val, dur))
+    }
+  }
+
+  // #1: When duration changes, auto-recalculate finish = start + duration
+  const handleDurChange = (val: string) => {
+    setEditDur(val)
+    const dur = parseInt(val) || 0
+    if (editStart && dur >= 0) {
+      setEditFinish(addDays(editStart, dur))
+    }
+  }
+
+  // #2: Milestone toggle forces duration to 0
+  const handleMilestoneToggle = (checked: boolean) => {
+    setEditMilestone(checked)
+    if (checked) {
+      setEditDur('0')
+      if (editStart) setEditFinish(editStart)
+    }
+  }
+
+  // #4: Status only auto-derived if user hasn't manually changed it
+  const handlePctChange = (val: string) => {
+    setEditPct(val)
+    if (!statusManuallySet) {
+      const pct = parseInt(val) || 0
+      if (pct >= 100) setEditStatus('completed')
+      else if (pct > 0) setEditStatus('in_progress')
+      else setEditStatus('not_started')
+    }
+  }
+
+  const handleStatusChange = (val: string) => {
+    setEditStatus(val)
+    setStatusManuallySet(true)
   }
 
   const saveEdit = async () => {
     if (!editId) return
     const pct = parseInt(editPct) || 0
+    const dur = parseInt(editDur) || 0
     let status: any = editStatus
-    if (pct >= 100) status = 'completed'
-    else if (pct > 0) status = 'in_progress'
-    else status = 'not_started'
+
+    // #4: Auto-derive status only if user hasn't manually overridden
+    if (!statusManuallySet) {
+      if (pct >= 100) status = 'completed'
+      else if (pct > 0) status = 'in_progress'
+      else status = 'not_started'
+    }
 
     try {
-      const existing = await db.activities.get(editId)
-      const base = existing || { id: editId, projectId: '', wbsCode: '', name: '', parentId: null, duration: 0,
-        startDate: null, finishDate: null, actualStart: null, actualFinish: null,
-        percentComplete: 0, earlyStart: null, earlyFinish: null, lateStart: null, lateFinish: null,
-        totalFloat: 0, isCritical: false, isMilestone: false, constraintType: 'ASAP', constraintDate: null,
-        status: 'not_started', wbsLevel: 1, bimRef: null, createdAt: '', updatedAt: '' }
-      const merged = { ...base, startDate: editStart || null, finishDate: editFinish || null, percentComplete: pct, status, isMilestone: editMilestone }
-      await db.activities.put(merged as any)
-
       const store = useProgrammeStore.getState()
       const idx = store.activities.findIndex(a => a.id === editId)
-      if (idx >= 0) {
-        const updated = [...store.activities]
-        for (let i = 0; i < updated.length; i++) {
-          if (i !== idx) updated[i] = { ...updated[i], constraintType: 'ASAP', constraintDate: null }
-        }
-        let lockStart = editStart || null
-        let lockFinish = editFinish || null
-        const orig = updated[idx]
-        if (!editStart && editFinish && editFinish !== orig.finishDate) {
-          const finishTs = new Date(editFinish + 'T00:00:00Z').getTime()
-          const startTs = finishTs - (orig.duration || 1) * 86400000
-          lockStart = new Date(startTs).toISOString().slice(0, 10)
-          lockFinish = editFinish
-        }
-        updated[idx] = { ...orig, startDate: lockStart, finishDate: lockFinish, percentComplete: pct, status, isMilestone: editMilestone, constraintType: lockStart ? 'SNET' : 'ASAP', constraintDate: lockStart || null }
-        const { dependencies } = useProgrammeStore.getState()
-        const project = useProgrammeStore.getState().project
-        const projectStart = project?.dataDate || new Date().toISOString().slice(0, 10)
-        const result = schedule(updated, dependencies, projectStart)
-        for (const a of result.activities) { try { await db.activities.put(a as any) } catch {} }
-        useProgrammeStore.setState({ activities: result.activities, scheduleResult: result })
+      if (idx < 0) { setEditId(null); return }
+
+      const updated = [...store.activities]
+      const orig = updated[idx]
+
+      // #7: DON'T clear other SNET locks — CPM forward pass handles multiple SNET correctly
+
+      // Build updated activity
+      const newWbs = editWbs.trim() || orig.wbsCode
+      const newName = editName.trim() || orig.name
+      const newDur = editMilestone ? 0 : dur
+      const newStart = editStart || null
+      let newFinish = editFinish || null
+
+      // #8: Ensure finish = start + duration if start is set
+      if (newStart && newDur >= 0) {
+        newFinish = addDays(newStart, newDur)
       }
+
+      // Back-calc start if only finish provided
+      if (!newStart && newFinish && newDur > 0) {
+        // leave start null — CPM will compute
+      }
+
+      updated[idx] = {
+        ...orig,
+        wbsCode: newWbs,
+        name: newName,
+        duration: newDur,
+        startDate: newStart,
+        finishDate: newFinish,
+        percentComplete: pct,
+        status,
+        isMilestone: editMilestone,
+        actualStart: editActualStart || null,
+        actualFinish: editActualFinish || null,
+        constraintType: newStart ? 'SNET' : 'ASAP',
+        constraintDate: newStart || null,
+      }
+
+      // #6: Update dependencies — parse predecessors and rebuild
+      const { dependencies: existingDeps, project } = store
+      const projectId = orig.projectId
+
+      // Delete existing deps where this activity is successor
+      const toDelete = existingDeps.filter(d => d.successorId === editId).map(d => d.id)
+      for (const depId of toDelete) {
+        await db.dependencies.delete(depId)
+      }
+      let newDeps = existingDeps.filter(d => !toDelete.includes(d.id))
+
+      // Parse new predecessors
+      const wbsToId = new Map(updated.map(a => [a.wbsCode, a.id]))
+      if (editPreds.trim()) {
+        const predCodes = editPreds.split(/[;,]/).map(s => s.trim()).filter(Boolean)
+        for (const code of predCodes) {
+          const predId = wbsToId.get(code)
+          if (predId && predId !== editId) {
+            const depId = crypto.randomUUID()
+            const dep = { id: depId, projectId, predecessorId: predId, successorId: editId, relationType: 'FS' as const, lagDays: 0 }
+            newDeps = [...newDeps, dep]
+            await db.dependencies.put(dep as any)
+          }
+        }
+      }
+
+      // Persist activity to DB
+      await db.activities.put(updated[idx] as any)
+
+      // Run CPM
+      const projectStart = project?.dataDate || new Date().toISOString().slice(0, 10)
+      const result = schedule(updated, newDeps, projectStart)
+
+      for (const a of result.activities) { try { await db.activities.put(a as any) } catch {} }
+
+      useProgrammeStore.setState({ activities: result.activities, dependencies: newDeps, scheduleResult: result })
       setEditId(null)
     } catch (e: any) { alert('Save failed: ' + (e?.message || String(e))) }
   }
 
-  // Render a single cell value for a column
   const renderCell = (act: Activity, key: ColKey) => {
     switch (key) {
       case 'wbs': return <span className="font-mono text-gray-400">{act.wbsCode}</span>
@@ -212,7 +327,7 @@ export default function WBSTree() {
         <div className="relative">
           <button onClick={() => setColMenuOpen(!colMenuOpen)}
             className="px-3 py-1 rounded text-xs font-medium bg-gray-100 text-gray-500 hover:bg-gray-200 transition-colors">
-            ☰ Columns
+            Columns
           </button>
           {colMenuOpen && (
             <div className="absolute right-0 top-8 bg-white border rounded-lg shadow-lg p-2 z-40 w-44"
@@ -230,42 +345,115 @@ export default function WBSTree() {
       <p className="text-xs text-gray-400 mb-3">Click any row to edit. Drag column borders to resize.</p>
 
       <div className="bg-white rounded-lg border border-gray-200 shadow-sm overflow-auto">
-        {/* Header */}
         <div className="flex items-center py-2 px-2 bg-gray-50 border-b font-semibold text-xs text-gray-500 sticky top-0 z-10">
           <span className="w-4 mr-1 flex-shrink-0" />
           {visibleCols.map(col => (
             <div key={col.key} className="flex-shrink-0 text-center overflow-hidden relative group"
               style={{ width: col.width === 999 ? undefined : col.width, flex: col.width === 999 ? '1 1 0%' : undefined }}>
               <span>{col.label}</span>
-              {/* Resize handle */}
-              <div
-                className="absolute right-0 top-0 bottom-0 w-2 cursor-col-resize hover:bg-purple-200 group-hover:bg-purple-100"
-                onMouseDown={(e) => startResize(e, col.key)}
-              />
+              <div className="absolute right-0 top-0 bottom-0 w-2 cursor-col-resize hover:bg-purple-200 group-hover:bg-purple-100"
+                onMouseDown={(e) => startResize(e, col.key)} />
             </div>
           ))}
         </div>
-        {/* Rows */}
         {rootActs.map(a => renderRow(a))}
       </div>
 
-      {/* Edit modal — unchanged */}
+      {/* Edit modal */}
       {editId && (() => {
-        const act = activities.find(x => x.id === editId)
-        if (!act) return null
         return (
           <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50" onClick={() => setEditId(null)}>
-            <div className="bg-white rounded-lg shadow-xl p-6 w-96" onClick={e => e.stopPropagation()}>
-              <h3 className="text-lg font-bold mb-1">{act.wbsCode}</h3>
-              <p className="text-sm text-gray-500 mb-4">{act.name}</p>
-              <div className="space-y-3">
-                <div><label className="text-xs text-gray-500">Start Date</label><input type="date" value={editStart} onChange={e => setEditStart(e.target.value)} className="w-full border rounded px-2 py-1 text-sm mt-1" /></div>
-                <div><label className="text-xs text-gray-500">Finish Date</label><input type="date" value={editFinish} onChange={e => setEditFinish(e.target.value)} className="w-full border rounded px-2 py-1 text-sm mt-1" /></div>
-                <div><label className="text-xs text-gray-500">% Complete</label><input type="range" min="0" max="100" value={editPct} onChange={e => setEditPct(e.target.value)} className="w-full mt-1" /><div className="text-center text-sm font-bold">{editPct}%</div></div>
-                <div><label className="text-xs text-gray-500">Status</label><select value={editStatus} onChange={e => setEditStatus(e.target.value)} className="w-full border rounded px-2 py-1 text-sm mt-1"><option value="not_started">Not Started</option><option value="in_progress">In Progress</option><option value="completed">Completed</option><option value="delayed">Delayed</option></select></div>
-                <div className="flex items-center gap-2"><input type="checkbox" id="isMilestone" checked={editMilestone} onChange={e => setEditMilestone(e.target.checked)} className="rounded" /><label htmlFor="isMilestone" className="text-sm text-gray-600">Mark as Milestone</label></div>
+            <div className="bg-white rounded-lg shadow-xl p-6 w-[440px] max-h-[90vh] overflow-auto" onClick={e => e.stopPropagation()}>
+              <div className="grid grid-cols-2 gap-3 mb-4">
+                <div>
+                  <label className="text-xs text-gray-500">WBS Code</label>
+                  <input type="text" value={editWbs} onChange={e => setEditWbs(e.target.value)}
+                    className="w-full border rounded px-2 py-1 text-sm mt-1 font-mono" />
+                </div>
+                <div>
+                  <label className="text-xs text-gray-500">Duration (days)</label>
+                  <input type="number" min="0" value={editDur} onChange={e => handleDurChange(e.target.value)}
+                    disabled={editMilestone}
+                    className="w-full border rounded px-2 py-1 text-sm mt-1 disabled:bg-gray-100 disabled:text-gray-400" />
+                </div>
               </div>
-              <div className="flex gap-2 mt-4"><button onClick={saveEdit} className="flex-1 bg-purple-600 text-white py-2 rounded text-sm font-medium hover:bg-purple-700">Save</button><button onClick={() => setEditId(null)} className="flex-1 bg-gray-100 text-gray-600 py-2 rounded text-sm hover:bg-gray-200">Cancel</button></div>
+
+              <div className="mb-3">
+                <label className="text-xs text-gray-500">Activity Name</label>
+                <input type="text" value={editName} onChange={e => setEditName(e.target.value)}
+                  className="w-full border rounded px-2 py-1 text-sm mt-1" />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3 mb-3">
+                <div>
+                  <label className="text-xs text-gray-500">Start Date</label>
+                  <input type="date" value={editStart} onChange={e => handleStartChange(e.target.value)}
+                    className="w-full border rounded px-2 py-1 text-sm mt-1" />
+                </div>
+                <div>
+                  <label className="text-xs text-gray-500">Finish Date</label>
+                  <input type="date" value={editFinish} onChange={e => setEditFinish(e.target.value)}
+                    className="w-full border rounded px-2 py-1 text-sm mt-1" />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3 mb-3">
+                <div>
+                  <label className="text-xs text-gray-500">Actual Start</label>
+                  <input type="date" value={editActualStart} onChange={e => setEditActualStart(e.target.value)}
+                    className="w-full border rounded px-2 py-1 text-sm mt-1" />
+                </div>
+                <div>
+                  <label className="text-xs text-gray-500">Actual Finish</label>
+                  <input type="date" value={editActualFinish} onChange={e => setEditActualFinish(e.target.value)}
+                    className="w-full border rounded px-2 py-1 text-sm mt-1" />
+                </div>
+              </div>
+
+              <div className="mb-3">
+                <label className="text-xs text-gray-500">% Complete</label>
+                <input type="range" min="0" max="100" value={editPct} onChange={e => handlePctChange(e.target.value)}
+                  className="w-full mt-1" />
+                <div className="text-center text-sm font-bold">{editPct}%</div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3 mb-3">
+                <div>
+                  <label className="text-xs text-gray-500">Status</label>
+                  <select value={editStatus} onChange={e => handleStatusChange(e.target.value)}
+                    className="w-full border rounded px-2 py-1 text-sm mt-1">
+                    <option value="not_started">Not Started</option>
+                    <option value="in_progress">In Progress</option>
+                    <option value="completed">Completed</option>
+                    <option value="delayed">Delayed</option>
+                  </select>
+                </div>
+                <div className="flex items-end pb-1">
+                  <label className="flex items-center gap-2 text-sm text-gray-600">
+                    <input type="checkbox" checked={editMilestone} onChange={e => handleMilestoneToggle(e.target.checked)}
+                      className="rounded" />
+                    Milestone
+                  </label>
+                </div>
+              </div>
+
+              <div className="mb-4">
+                <label className="text-xs text-gray-500">Predecessors (WBS codes, semicolon-separated)</label>
+                <input type="text" value={editPreds} onChange={e => setEditPreds(e.target.value)}
+                  placeholder="e.g. 1.1; 1.2"
+                  className="w-full border rounded px-2 py-1 text-sm mt-1 font-mono" />
+              </div>
+
+              <div className="flex gap-2">
+                <button onClick={saveEdit}
+                  className="flex-1 bg-purple-600 text-white py-2 rounded text-sm font-medium hover:bg-purple-700">
+                  Save
+                </button>
+                <button onClick={() => setEditId(null)}
+                  className="flex-1 bg-gray-100 text-gray-600 py-2 rounded text-sm hover:bg-gray-200">
+                  Cancel
+                </button>
+              </div>
             </div>
           </div>
         )

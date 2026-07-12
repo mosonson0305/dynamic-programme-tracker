@@ -222,7 +222,7 @@ export function calculateFloat(
     const totalFloat = daysBetween(early.earlyStart, late.lateStart)
     float.set(a.id, {
       totalFloat,
-      isCritical: totalFloat === 0,
+      isCritical: totalFloat <= 0,
     })
   }
 
