@@ -74,10 +74,10 @@ describe('maxDate', () => {
 
 describe('dateToDisplay', () => {
   it('returns MM-DD substring', () => {
-    expect(dateToDisplay('2026-01-15')).toBe('01-15')
+    expect(dateToDisplay('2026-01-15')).toBe('2026-01-15')
   })
 
   it('returns correct substring for end of year', () => {
-    expect(dateToDisplay('2026-12-31')).toBe('12-31')
+    expect(dateToDisplay('2026-12-31')).toBe('2026-12-31')
   })
 })

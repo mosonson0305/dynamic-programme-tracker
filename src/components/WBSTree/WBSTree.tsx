@@ -351,8 +351,8 @@ export default function WBSTree() {
       case 'wbs': return <span className="font-mono text-gray-400">{act.wbsCode}</span>
       case 'name': return <span className="truncate">{act.name}</span>
       case 'dur': return <span className="text-gray-500">{act.duration}d</span>
-      case 'start': return <span className="text-gray-500 font-mono text-xs">{act.startDate?.slice(5) || '--'}</span>
-      case 'finish': return <span className="text-gray-500 font-mono text-xs">{act.finishDate?.slice(5) || '--'}</span>
+      case 'start': return <span className="text-gray-500 font-mono text-xs">{act.startDate || '--'}</span>
+      case 'finish': return <span className="text-gray-500 font-mono text-xs">{act.finishDate || '--'}</span>
       case 'pct': return <span className="text-gray-500">{act.percentComplete}%</span>
       case 'float':
         return (
@@ -363,10 +363,10 @@ export default function WBSTree() {
           </span>
         )
       case 'status': return <span className="text-gray-400 text-xs capitalize">{act.status.replace('_', ' ')}</span>
-      case 'es': return <span className="text-gray-400 font-mono text-xs">{act.earlyStart?.slice(5) || '--'}</span>
-      case 'ef': return <span className="text-gray-400 font-mono text-xs">{act.earlyFinish?.slice(5) || '--'}</span>
-      case 'ls': return <span className="text-gray-400 font-mono text-xs">{act.lateStart?.slice(5) || '--'}</span>
-      case 'lf': return <span className="text-gray-400 font-mono text-xs">{act.lateFinish?.slice(5) || '--'}</span>
+      case 'es': return <span className="text-gray-400 font-mono text-xs">{act.earlyStart || '--'}</span>
+      case 'ef': return <span className="text-gray-400 font-mono text-xs">{act.earlyFinish || '--'}</span>
+      case 'ls': return <span className="text-gray-400 font-mono text-xs">{act.lateStart || '--'}</span>
+      case 'lf': return <span className="text-gray-400 font-mono text-xs">{act.lateFinish || '--'}</span>
     }
   }
 

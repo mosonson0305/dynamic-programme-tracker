@@ -28,5 +28,5 @@ export function maxDate(a: string, b: string): string {
 }
 
 export function dateToDisplay(dateStr: string): string {
-  return dateStr.slice(5)
+  return dateStr
 }
