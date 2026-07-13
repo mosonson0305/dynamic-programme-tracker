@@ -28,20 +28,15 @@ export function schedule(
 
   const cloned: Activity[] = activities.map((a) => ({ ...a }))
 
-  // Track which activities have manually-set SNET (from WBS edit)
-  // These activities' startDate should be preserved, not overwritten by CPM.
+  // Inject SNET for ALL activities that have an explicit startDate from CSV/import.
+  // This preserves the user's intended dates — CPM will still calculate float and
+  // critical path, but won't overwrite start dates that were explicitly provided.
   const manualStartDates = new Map<string, string>()
   for (const a of cloned) {
-    if (a.constraintType === 'SNET' && a.constraintDate) {
-      manualStartDates.set(a.id, a.constraintDate)
-    } else if (!a.constraintType || a.constraintType === 'ASAP') {
-      // For activities with no deps and a startDate, inject SNET
-      const hasDeps = dependencies.some(d => d.successorId === a.id)
-      if (!hasDeps && a.startDate) {
-        manualStartDates.set(a.id, a.startDate)
-        a.constraintType = 'SNET'
-        a.constraintDate = a.startDate
-      }
+    if (a.startDate) {
+      manualStartDates.set(a.id, a.startDate)
+      a.constraintType = 'SNET'
+      a.constraintDate = a.startDate
     }
   }
 
