@@ -1,0 +1,2 @@
+PS C:\Users\User> cd "C:\Hermes Workspace\dynamic-programme-tracker"
+PS C:\Hermes Workspace\dynamic-programme-tracker> npm run dev

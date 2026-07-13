@@ -16,7 +16,7 @@ interface ProgrammeState {
   warnings: string[]
 
   // UI state
-  activeTab: 'gantt' | 'dashboard' | 'wbs' | 'csv' | 'export'
+  activeTab: 'gantt' | 'dashboard' | 'compare' | 'wbs' | 'csv' | 'export'
   isLoading: boolean
   error: string | null
 

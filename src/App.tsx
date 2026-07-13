@@ -1,8 +1,9 @@
-import { LayoutDashboard, BarChart3, FileDown, FileUp, GitBranch } from 'lucide-react'
+import { LayoutDashboard, BarChart3, FileDown, FileUp, GitBranch, GitCompare } from 'lucide-react'
 import { useProgrammeStore } from './store/programmeStore'
 import GanttView from './components/Gantt/GanttView'
 import WBSTree from './components/WBSTree/WBSTree'
 import Dashboard from './components/Dashboard/Dashboard'
+import BaselineComparison from './components/Dashboard/BaselineComparison'
 import CSVImport from './components/CSV/CSVImport'
 import CSVExport from './components/CSV/CSVExport'
 
@@ -10,6 +11,7 @@ const tabs = [
   { id: 'csv' as const, label: 'CSV', icon: FileUp },
   { id: 'gantt' as const, label: 'Gantt', icon: BarChart3 },
   { id: 'dashboard' as const, label: 'Dashboard', icon: LayoutDashboard },
+  { id: 'compare' as const, label: 'Compare', icon: GitCompare },
   { id: 'wbs' as const, label: 'WBS Tree', icon: GitBranch },
   { id: 'export' as const, label: 'Export', icon: FileDown },
 ]
@@ -62,6 +64,7 @@ export default function App() {
         {activeTab === 'csv' && <CSVImport />}
         {activeTab === 'gantt' && <GanttView />}
         {activeTab === 'dashboard' && <Dashboard />}
+        {activeTab === 'compare' && <BaselineComparison />}
         {activeTab === 'wbs' && <WBSTree />}
         {activeTab === 'export' && <CSVExport />}
       </main>
